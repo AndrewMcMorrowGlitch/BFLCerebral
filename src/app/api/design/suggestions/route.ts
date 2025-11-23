@@ -43,7 +43,7 @@ export async function POST(request: Request) {
           role: 'user',
           content: [
             {
-              type: 'text',
+              type: 'text' as const,
               text:
                 'You are an interior design strategist. Given the spatial JSON describing a room layout, ' +
                 'identify layout issues, suggest improvements referencing region IDs, and propose generic product ideas ' +
@@ -59,13 +59,13 @@ export async function POST(request: Request) {
                 'Measurements can be proportional estimates even if approximate.',
             },
             {
-              type: 'text',
+              type: 'text' as const,
               text: `Spatial JSON:\n${JSON.stringify(body.spatialJson)}`,
             },
             ...(body.userPrompt
               ? [
                   {
-                    type: 'text',
+                    type: 'text' as const,
                     text: `User instructions/context: ${body.userPrompt}`,
                   },
                 ]

@@ -977,32 +977,41 @@ const ProportionOverlay = ({
             strokeDasharray="1 1"
           />
         ))}
-        {data.furniture?.map((item) => (
-          <g key={item.id}>
-            <rect
-              x={toPoint(item.box.x)}
-              y={toPoint(item.box.y)}
-              width={toPoint(item.box.width)}
-              height={toPoint(item.box.height)}
-              fill="none"
-              stroke={isHighlighted(item.id) ? '#f97316' : '#2563eb'}
-              strokeWidth={isHighlighted(item.id) ? 1.2 : 0.6}
-              rx={0.8}
-            />
-            {item.label && (
-              <text
-                x={toPoint(item.box.x + item.box.width / 2)}
-                y={toPoint(item.box.y) - 0.5}
-                textAnchor="middle"
-                fill="#1d4ed8"
-                fontSize="2"
-                fontWeight="600"
-              >
-                {item.label}
-              </text>
-            )}
-          </g>
-        ))}
+        {data.furniture?.map((item) => {
+          const x = toPoint(item.box?.x ?? 0);
+          const y = toPoint(item.box?.y ?? 0);
+          const width = toPoint(item.box?.width ?? 0);
+          const height = toPoint(item.box?.height ?? 0);
+          if ([x, y, width, height].some((value) => Number.isNaN(value))) {
+            return null;
+          }
+          return (
+            <g key={item.id}>
+              <rect
+                x={x}
+                y={y}
+                width={width}
+                height={height}
+                fill="none"
+                stroke={isHighlighted(item.id) ? '#f97316' : '#2563eb'}
+                strokeWidth={isHighlighted(item.id) ? 1.2 : 0.6}
+                rx={0.8}
+              />
+              {item.label && (
+                <text
+                  x={x + width / 2}
+                  y={y - 0.5}
+                  textAnchor="middle"
+                  fill="#1d4ed8"
+                  fontSize="2"
+                  fontWeight="600"
+                >
+                  {item.label}
+                </text>
+              )}
+            </g>
+          );
+        })}
         {data.walkways?.map((path) => (
           <polyline
             key={path.id}
