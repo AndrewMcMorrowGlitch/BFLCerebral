@@ -1,308 +1,277 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import RenderPreview from '@/components/RenderPreview';
-import { SceneEditor, SceneEditorHandle } from '@/components/SceneEditor';
-import { createObject, INITIAL_ROOM_STATE, RoomObject, RoomState } from '@/lib/roomState';
-import {
-  Armchair,
-  Box,
-  Download,
-  Flower2,
-  Lamp,
-  LayoutGrid,
-  Library,
-  Loader2,
-  Maximize2,
-  Move3d,
-  Palette,
-  Plus,
-  RefreshCw,
-  Sofa,
-  Trash2,
-  Type
-} from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Sparkles, ArrowRight, Share2, Maximize2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import ImageUploader from "@/components/ui/ImageUploader";
+import MessageBubble from "@/components/ui/MessageBubble";
+import { cn } from "@/lib/utils";
+
+interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content?: string;
+  imageUrl?: string;
+  type: 'text' | 'image';
+}
+
+interface Project {
+  id: string;
+  current_image_url: string;
+}
 
 export default function Home() {
-  const [roomState, setRoomState] = useState<RoomState>(INITIAL_ROOM_STATE);
-  const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const editorRef = useRef<SceneEditorHandle>(null);
-  const isGeneratingRef = useRef(false);
+  const [activeProject, setActiveProject] = useState<Project | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputText, setInputText] = useState("");
+  const [isAiThinking, setIsAiThinking] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to bottom of chat
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   useEffect(() => {
-    isGeneratingRef.current = isGenerating;
-  }, [isGenerating]);
+    scrollToBottom();
+  }, [messages]);
 
-  const updateObject = (id: string, updates: Partial<RoomObject>) => {
-    setRoomState((prev) => ({
-      ...prev,
-      objects: prev.objects.map((obj) =>
-        obj.id === id
-          ? {
-            ...obj,
-            ...updates,
-            position: updates.position ? { ...obj.position, ...updates.position } : obj.position,
-            size: updates.size ? { ...obj.size, ...updates.size } : obj.size,
-            material: updates.material ? { ...obj.material, ...updates.material } : obj.material,
-          }
-          : obj,
-      ),
-    }));
+  const handleUploadComplete = (url: string) => {
+    const newProject: Project = {
+      id: Date.now().toString(),
+      current_image_url: url,
+    };
+    setActiveProject(newProject);
+    setMessages([
+      {
+        id: 'init',
+        role: 'assistant',
+        content: "I've loaded your room. What would you like to change? You can ask to change colors, furniture, or style.",
+        type: 'text',
+      },
+    ]);
   };
 
-  const removeSelectedObject = () => {
-    if (!selectedObjectId) return;
-    setRoomState((prev) => ({
-      ...prev,
-      objects: prev.objects.filter((obj) => obj.id !== selectedObjectId),
-    }));
-    setSelectedObjectId(null);
-  };
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputText.trim() || !activeProject) return;
 
-  const addObject = (type: string) => {
-    const newObj = createObject(type);
-    setRoomState((prev) => ({
-      ...prev,
-      objects: [...prev.objects, newObj],
-    }));
-    setSelectedObjectId(newObj.id);
-  };
+    const userMsg = inputText;
+    setInputText("");
 
-  const triggerRender = useCallback(
-    async (reason: 'auto' | 'manual') => {
-      if (!editorRef.current) return;
-      if (isGeneratingRef.current && reason === 'auto') return;
+    // Add user message
+    const userMessageObj: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: userMsg,
+      type: 'text',
+    };
+    setMessages(prev => [...prev, userMessageObj]);
 
-      const clayImage = editorRef.current.captureClay();
-      if (!clayImage) return;
+    setIsAiThinking(true);
 
-      setIsGenerating(true);
-      setError(null);
-      try {
-        const response = await fetch('/api/render', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clayImage, roomState }),
-        });
+    try {
+      // Call API to generate new image
+      const response = await fetch('/api/render', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageUrl: activeProject.current_image_url,
+          prompt: "photorealistic, interior design, " + userMsg, // Basic prompt engineering
+        }),
+      });
 
-        if (!response.ok) {
-          throw new Error(`Server error: ${response.status}`);
-        }
+      if (!response.ok) throw new Error('Generation failed');
 
-        const data = await response.json();
+      const data = await response.json();
 
-        if (data.error) {
-          throw new Error(data.error);
-        }
+      if (data.imageUrl) {
+        // Update project image
+        setActiveProject(prev => prev ? ({ ...prev, current_image_url: data.imageUrl }) : null);
 
-        if (data.imageUrl) {
-          setPreviewUrl(data.imageUrl);
-          setRoomState((prev) => ({
-            ...prev,
-            styleReferenceImages: [...prev.styleReferenceImages, data.imageUrl],
-          }));
-        }
-
-        if (data.warning) {
-          console.warn(data.warning);
-        }
-      } catch (err: any) {
-        console.error('Render failed', err);
-        setError(err.message || 'Failed to generate image');
-      } finally {
-        setIsGenerating(false);
+        // Add assistant response
+        const aiMessageObj: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: `Here is a version with "${userMsg}". How does this look?`,
+          imageUrl: data.imageUrl,
+          type: 'image',
+        };
+        setMessages(prev => [...prev, aiMessageObj]);
+      } else {
+        throw new Error(data.warning || 'No image returned');
       }
-    },
-    [roomState],
-  );
 
-  // Auto-regenerate whenever objects/camera change (debounced)
-  useEffect(() => {
-    const timer = setTimeout(() => triggerRender('auto'), 1000);
-    return () => clearTimeout(timer);
-  }, [roomState.objects, roomState.camera, triggerRender]);
-
-  const handleDownload = () => {
-    if (previewUrl) {
-      const link = document.createElement('a');
-      link.href = previewUrl;
-      link.download = `room-render-${Date.now()}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Generation error:', error);
+      const errorMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: "Sorry, I couldn't generate that change. Please try again.",
+        type: 'text',
+      };
+      setMessages(prev => [...prev, errorMsg]);
+    } finally {
+      setIsAiThinking(false);
     }
   };
 
-  return (
-    <main className="flex h-screen w-screen bg-neutral-950 text-white overflow-hidden font-sans selection:bg-blue-500/30">
-      {/* Sidebar */}
-      <div className="w-16 flex flex-col items-center py-4 border-r border-neutral-800 bg-neutral-900 z-20">
-        <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center mb-6 shadow-lg shadow-blue-900/20">
-          <Move3d size={20} className="text-white" />
+  // Empty State / Upload
+  if (!activeProject) {
+    return (
+      <div className="container mx-auto max-w-7xl px-4 min-h-[calc(100vh-64px)] flex flex-col items-center justify-center">
+        <div className="text-center mb-12">
+          <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-stone-900 mb-6">
+            Redesign your space<br />
+            <span className="text-stone-400">in seconds.</span>
+          </h1>
+          <p className="text-lg text-stone-500 max-w-xl mx-auto">
+            Upload a photo of your room and use AI to explore new styles, furniture, and colors instantly.
+          </p>
         </div>
 
-        <div className="flex flex-col gap-4 w-full px-2">
-          <div className="group relative flex justify-center">
-            <button onClick={() => addObject('sofa')} className="p-3 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-white transition-all">
-              <Sofa size={20} />
-            </button>
-            <span className="absolute left-14 top-1/2 -translate-y-1/2 bg-neutral-800 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 border border-neutral-700">Add Sofa</span>
-          </div>
-          <div className="group relative flex justify-center">
-            <button onClick={() => addObject('chair')} className="p-3 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-white transition-all">
-              <Armchair size={20} />
-            </button>
-            <span className="absolute left-14 top-1/2 -translate-y-1/2 bg-neutral-800 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 border border-neutral-700">Add Chair</span>
-          </div>
-          <div className="group relative flex justify-center">
-            <button onClick={() => addObject('table')} className="p-3 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-white transition-all">
-              <Box size={20} />
-            </button>
-            <span className="absolute left-14 top-1/2 -translate-y-1/2 bg-neutral-800 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 border border-neutral-700">Add Table</span>
-          </div>
-          <div className="group relative flex justify-center">
-            <button onClick={() => addObject('shelf')} className="p-3 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-white transition-all">
-              <Library size={20} />
-            </button>
-            <span className="absolute left-14 top-1/2 -translate-y-1/2 bg-neutral-800 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 border border-neutral-700">Add Shelf</span>
-          </div>
-          <div className="group relative flex justify-center">
-            <button onClick={() => addObject('plant')} className="p-3 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-white transition-all">
-              <Flower2 size={20} />
-            </button>
-            <span className="absolute left-14 top-1/2 -translate-y-1/2 bg-neutral-800 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 border border-neutral-700">Add Plant</span>
-          </div>
-          <div className="group relative flex justify-center">
-            <button onClick={() => addObject('lamp')} className="p-3 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-white transition-all">
-              <Lamp size={20} />
-            </button>
-            <span className="absolute left-14 top-1/2 -translate-y-1/2 bg-neutral-800 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 border border-neutral-700">Add Lamp</span>
-          </div>
-          <div className="group relative flex justify-center">
-            <button onClick={() => addObject('rug')} className="p-3 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-white transition-all">
-              <LayoutGrid size={20} />
-            </button>
-            <span className="absolute left-14 top-1/2 -translate-y-1/2 bg-neutral-800 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 border border-neutral-700">Add Rug</span>
+        <div className="w-full">
+          <ImageUploader onUploadComplete={handleUploadComplete} />
+        </div>
+      </div>
+    );
+  }
+
+  // Workspace State
+  return (
+    <div className="min-h-[calc(100vh-64px)] flex flex-col lg:flex-row overflow-hidden bg-stone-50">
+
+      {/* LEFT: Canvas / Image Preview */}
+      <div className="w-full lg:w-[60%] h-[40vh] lg:h-full relative bg-stone-100 flex items-center justify-center p-4 lg:p-12 border-b lg:border-b-0 lg:border-r border-stone-200">
+        <div className="relative w-full h-full max-h-[800px] flex items-center justify-center shadow-2xl shadow-stone-200/50 rounded-2xl overflow-hidden bg-white">
+          {/* Main Image */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            id="main-canvas-image"
+            src={activeProject.current_image_url}
+            alt="Current Room"
+            className="w-full h-full object-contain bg-white"
+          />
+
+          {/* Floating Action Bar */}
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 bg-white/90 backdrop-blur-md p-2 rounded-full border border-stone-200/50 shadow-lg opacity-0 hover:opacity-100 transition-opacity duration-300">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full hover:bg-stone-100"
+              title="Open Original"
+              onClick={() => window.open(activeProject.current_image_url, '_blank')}
+            >
+              <Share2 className="w-4 h-4 text-stone-600" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full hover:bg-stone-100"
+              title="Toggle Fullscreen"
+              onClick={() => {
+                const elem = document.getElementById('main-canvas-image');
+                if (elem && elem.requestFullscreen) {
+                  elem.requestFullscreen();
+                }
+              }}
+            >
+              <Maximize2 className="w-4 h-4 text-stone-600" />
+            </Button>
           </div>
         </div>
       </div>
 
-      {/* Editor Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <div className="h-16 border-b border-neutral-800 flex items-center justify-between px-6 bg-neutral-900/50 backdrop-blur z-10">
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight">Studio</h1>
-            <p className="text-xs text-neutral-500">Design your space in 3D</p>
-          </div>
+      {/* RIGHT: Chat Interface */}
+      <div className="w-full lg:w-[40%] h-[60vh] lg:h-full flex flex-col bg-white">
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => triggerRender('manual')}
-              disabled={isGenerating}
-              className="px-4 py-2 bg-white text-black hover:bg-neutral-200 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2 shadow-lg shadow-white/5"
-            >
-              <RefreshCw size={16} className={isGenerating ? "animate-spin" : ""} />
-              {isGenerating ? 'Rendering...' : 'Regenerate'}
-            </button>
+        {/* Chat Header */}
+        <div className="h-16 border-b border-stone-100 flex items-center justify-between px-6 bg-white z-10">
+          <div>
+            <h2 className="font-semibold text-stone-900">Design Assistant</h2>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+              <span className="text-xs text-stone-500 font-medium">Online</span>
+            </div>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setActiveProject(null)}
+            className="text-stone-500 hover:text-stone-900 border-stone-200"
+          >
+            New Project
+          </Button>
         </div>
 
-        <div className="flex-1 flex relative">
-          {/* 3D Canvas */}
-          <div className="flex-1 relative bg-neutral-100/5">
-            <SceneEditor
-              ref={editorRef}
-              roomState={roomState}
-              onRoomStateChange={setRoomState}
-              selectedObjectId={selectedObjectId}
-              onSelect={setSelectedObjectId}
+        {/* Messages Area */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-2 scroll-smooth">
+          {messages.map((msg) => (
+            <MessageBubble
+              key={msg.id}
+              role={msg.role}
+              content={msg.content}
+              imageUrl={msg.imageUrl}
+              type={msg.type}
+            />
+          ))}
+          {/* Typing Indicator Placeholder */}
+          {isAiThinking && (
+            <div className="flex w-full mb-6 justify-start">
+              <div className="bg-white border border-stone-100 rounded-2xl rounded-tl-none p-4 shadow-sm">
+                <div className="flex gap-1">
+                  <span className="w-2 h-2 bg-stone-400 rounded-full animate-bounce"></span>
+                  <span className="w-2 h-2 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></span>
+                  <span className="w-2 h-2 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span>
+                </div>
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input Area */}
+        <div className="p-4 lg:p-6 bg-white border-t border-stone-100">
+          <form
+            onSubmit={handleSendMessage}
+            className="relative flex items-center gap-2 bg-stone-50 p-2 rounded-2xl border border-stone-200 focus-within:border-stone-400 focus-within:ring-2 focus-within:ring-stone-100 transition-all"
+          >
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="text-stone-400 hover:text-stone-600 hover:bg-stone-200/50 rounded-xl"
+            >
+              <Sparkles className="w-5 h-5" />
+            </Button>
+
+            <Input
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              placeholder="Make the sofa blue, change style to modern..."
+              className="flex-1 border-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-stone-400 h-10"
             />
 
-            {/* Floating Object Inspector */}
-            {selectedObjectId && (
-              <div className="absolute top-6 right-6 w-72 bg-neutral-900/95 backdrop-blur-xl border border-neutral-800 rounded-xl p-4 shadow-2xl animate-in fade-in slide-in-from-right-4 duration-200">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="text-sm font-medium text-white">Properties</h3>
-                    <p className="text-xs text-neutral-500 font-mono mt-0.5">{selectedObjectId.slice(0, 8)}</p>
-                  </div>
-                  <button
-                    onClick={removeSelectedObject}
-                    className="text-neutral-400 hover:text-red-400 p-1.5 rounded-md hover:bg-red-900/20 transition-colors"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-xs font-medium text-neutral-400 mb-2 flex items-center gap-1">
-                      <Palette size={12} /> Material Color
-                    </label>
-                    <div className="grid grid-cols-5 gap-2">
-                      {['#ffffff', '#e5e5e5', '#888888', '#1a1a1a', '#8b4513', '#d2691e', '#228b22', '#4682b4', '#ff6347', '#ffd700'].map(
-                        (color) => (
-                          <button
-                            key={color}
-                            onClick={() => updateObject(selectedObjectId, { material: { color } })}
-                            className={`w-8 h-8 rounded-full border border-neutral-700 hover:scale-110 transition-transform shadow-sm ${roomState.objects.find((o) => o.id === selectedObjectId)?.material.color === color
-                                ? 'ring-2 ring-white ring-offset-2 ring-offset-neutral-900'
-                                : ''
-                              }`}
-                            style={{ backgroundColor: color }}
-                          />
-                        ),
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Preview Panel */}
-          <div className="w-[45%] border-l border-neutral-800 bg-neutral-950 flex flex-col relative">
-            <div className="absolute top-4 right-4 z-10 flex gap-2">
-              {previewUrl && (
-                <button
-                  onClick={handleDownload}
-                  className="p-2 bg-black/50 hover:bg-black/70 backdrop-blur rounded-lg text-white border border-white/10 transition-colors"
-                  title="Download Image"
-                >
-                  <Download size={16} />
-                </button>
+            <Button
+              type="submit"
+              disabled={!inputText.trim() || isAiThinking}
+              className={cn(
+                "rounded-xl transition-all duration-200",
+                inputText.trim()
+                  ? "bg-stone-900 hover:bg-stone-800 text-white shadow-md"
+                  : "bg-stone-200 text-stone-400 cursor-not-allowed"
               )}
-              <button className="p-2 bg-black/50 hover:bg-black/70 backdrop-blur rounded-lg text-white border border-white/10 transition-colors">
-                <Maximize2 size={16} />
-              </button>
-            </div>
-
-            <div className="flex-1 relative">
-              <RenderPreview imageUrl={previewUrl} isLoading={isGenerating} />
-
-              {error && (
-                <div className="absolute bottom-4 left-4 right-4 bg-red-900/90 text-red-100 p-3 rounded-lg text-sm border border-red-800 shadow-lg backdrop-blur">
-                  Error: {error}
-                </div>
-              )}
-            </div>
-
-            {/* Status Bar */}
-            <div className="h-10 border-t border-neutral-800 bg-neutral-900 flex items-center px-4 justify-between text-xs text-neutral-500">
-              <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${isGenerating ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`} />
-                {isGenerating ? 'Processing...' : 'Ready'}
-              </div>
-              <div>
-                {roomState.objects.length} Objects • {roomState.styleReferenceImages.length} Refs
-              </div>
-            </div>
-          </div>
+            >
+              <ArrowRight className="w-5 h-5" />
+            </Button>
+          </form>
+          <p className="text-center text-xs text-stone-400 mt-3 font-light">
+            AI generated images may be inaccurate.
+          </p>
         </div>
+
       </div>
-    </main>
+    </div>
   );
 }
