@@ -11,6 +11,7 @@ export interface AnalyzeProductsRequest {
   originalImage: string;
   decoratedImage: string;
   theme?: string;
+  provider?: 'claude' | 'gemini';
 }
 
 export interface Product {

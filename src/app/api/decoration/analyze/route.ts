@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { analyzeProducts } from '@/lib/services/claude-ai';
+import { analyzeProductsWithGemini } from '@/lib/services/gemini-ai';
 
 export async function POST(request: NextRequest) {
   console.log('Analyze endpoint called');
@@ -9,10 +10,11 @@ export async function POST(request: NextRequest) {
     console.log('Request body received:', { 
       hasOriginal: !!body.originalImage, 
       hasDecorated: !!body.decoratedImage,
-      theme: body.theme 
+      theme: body.theme,
+      provider: body.provider
     });
     
-    const { originalImage, decoratedImage, theme } = body;
+    const { originalImage, decoratedImage, theme, provider = 'claude' } = body;
 
     if (!originalImage || !decoratedImage) {
       return NextResponse.json(
@@ -21,12 +23,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Calling analyzeProducts...');
-    const products = await analyzeProducts(
-      originalImage,
-      decoratedImage,
-      theme || 'halloween'
-    );
+    let products;
+    
+    if (provider === 'gemini') {
+      console.log('Calling analyzeProductsWithGemini...');
+      products = await analyzeProductsWithGemini(
+        originalImage,
+        decoratedImage,
+        theme || 'halloween'
+      );
+    } else {
+      console.log('Calling analyzeProducts (Claude)...');
+      products = await analyzeProducts(
+        originalImage,
+        decoratedImage,
+        theme || 'halloween'
+      );
+    }
 
     console.log('Products analyzed successfully');
     return NextResponse.json({ products });
