@@ -372,32 +372,6 @@ export default function Home() {
     }
   };
 
-  const analyzeProducts = async (originalUrl: string, decoratedUrl: string) => {
-    try {
-      const response = await fetch('/api/decoration/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          originalImage: originalUrl,
-          decoratedImage: decoratedUrl,
-          provider: 'gemini',
-        }),
-      });
-
-      if (!response.ok) {
-        console.error('Product analysis failed');
-        return;
-      }
-
-      const data = await response.json();
-      if (data.products && data.products.products) {
-        setActiveProject(prev => prev ? ({ ...prev, products: data.products.products }) : null);
-      }
-    } catch (error) {
-      console.error('Error analyzing products:', error);
-    }
-  };
-
   const currentSpatialData = activeProject
     ? spatialDataMap[activeProject.current_image_url]
     : null;

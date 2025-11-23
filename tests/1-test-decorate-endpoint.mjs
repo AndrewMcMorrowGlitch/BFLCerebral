@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+
 /**
  * ATOMIC TEST 1: Test decoration endpoint only
  * Tests: POST /api/decoration/decorate

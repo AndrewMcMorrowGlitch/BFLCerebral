@@ -4,6 +4,19 @@ import { fal } from '@fal-ai/client';
 const FAL_ENDPOINT = 'fal-ai/beta-image-232/edit';
 const CUSTOM_IMAGE_SIZE = { width: 1920, height: 1080 };
 
+type FalImage = {
+  url?: string;
+};
+
+type FalImagePayload = {
+  images?: FalImage[];
+  image?: FalImage;
+};
+
+type FalResponse = FalImagePayload & {
+  data?: FalImagePayload;
+};
+
 const ensureFalConfigured = (() => {
   let configured = false;
   return () => {
@@ -61,9 +74,7 @@ export async function POST(request: Request) {
       const result = await fal.subscribe(FAL_ENDPOINT, {
         input: {
           prompt,
-          image_urls: Array.from(
-            new Set([imageUrl, ...referenceImageUrls]),
-          ),
+          image_urls: Array.from(new Set([imageUrl, ...referenceImageUrls])),
           guidance_scale: 6,
           num_inference_steps: 40,
           num_images: 1,
@@ -74,7 +85,8 @@ export async function POST(request: Request) {
         },
       });
 
-      const output = (result as any)?.data ?? result;
+      const falResult = result as FalResponse;
+      const output = falResult.data ?? falResult;
       const generatedUrl =
         (Array.isArray(output?.images) && output.images[0]?.url) ||
         output?.image?.url;
@@ -84,17 +96,21 @@ export async function POST(request: Request) {
       }
 
       console.warn('FAL result missing images; returning original image.');
-      return NextResponse.json({ imageUrl, warning: 'FAL result did not include an image.' });
+      return NextResponse.json({
+        imageUrl,
+        warning: 'FAL result did not include an image.',
+      });
     } catch (falError) {
       console.error('FAL request failed:', falError);
-      return NextResponse.json({ imageUrl, warning: 'Generation failed on server.' });
+      return NextResponse.json({
+        imageUrl,
+        warning: 'Generation failed on server.',
+      });
     }
-
-  } catch (error: any) {
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Internal Server Error';
     console.error('Error in /api/render:', error);
-    return NextResponse.json({
-      error: error.message || 'Internal Server Error',
-      imageUrl: null
-    }, { status: 500 });
+    return NextResponse.json({ error: message, imageUrl: null }, { status: 500 });
   }
 }

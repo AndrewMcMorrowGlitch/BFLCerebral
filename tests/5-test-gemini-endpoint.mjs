@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+
 /**
  * ATOMIC TEST 5: Test Gemini integration for analyze endpoint
  * Tests: POST /api/decoration/analyze with provider=gemini

@@ -4,50 +4,49 @@ import { analyzeProductsWithGemini } from '@/lib/services/gemini-ai';
 
 export async function POST(request: NextRequest) {
   console.log('Analyze endpoint called');
-  
+
   try {
     const body = await request.json();
-    console.log('Request body received:', { 
-      hasOriginal: !!body.originalImage, 
+    console.log('Request body received:', {
+      hasOriginal: !!body.originalImage,
       hasDecorated: !!body.decoratedImage,
       theme: body.theme,
-      provider: body.provider
+      provider: body.provider,
     });
-    
+
     const { originalImage, decoratedImage, theme, provider = 'claude' } = body;
 
     if (!originalImage || !decoratedImage) {
       return NextResponse.json(
         { error: 'Original and decorated images are required' },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     let products;
-    
+
     if (provider === 'gemini') {
       console.log('Calling analyzeProductsWithGemini...');
       products = await analyzeProductsWithGemini(
         originalImage,
         decoratedImage,
-        theme || 'halloween'
+        theme || 'halloween',
       );
     } else {
       console.log('Calling analyzeProducts (Claude)...');
       products = await analyzeProducts(
         originalImage,
         decoratedImage,
-        theme || 'halloween'
+        theme || 'halloween',
       );
     }
 
     console.log('Products analyzed successfully');
     return NextResponse.json({ products });
-  } catch (error: any) {
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Failed to analyze products';
     console.error('Error in analyze endpoint:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to analyze products' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

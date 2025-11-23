@@ -2,6 +2,14 @@ import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { jsonrepair } from 'jsonrepair';
 
+type SpatialJson = Record<string, unknown>;
+
+interface SuggestionRequestBody {
+  imageUrl?: string;
+  spatialJson?: SpatialJson;
+  userPrompt?: string;
+}
+
 const anthropicClient = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null;
@@ -14,11 +22,7 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: {
-    imageUrl?: string;
-    spatialJson?: any;
-    userPrompt?: string;
-  };
+  let body: SuggestionRequestBody;
 
   try {
     body = await request.json();
@@ -75,7 +79,7 @@ export async function POST(request: Request) {
       ],
     });
 
-    let textContent = response.content
+    const textContent = response.content
       .filter((item) => item.type === 'text')
       .map((item) => item.text)
       .join('');
