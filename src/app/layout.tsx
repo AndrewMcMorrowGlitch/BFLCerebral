@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "InteriorFlow | AI Room Designer",
+  title: "Decor AI | AI Room Designer",
   description: "Upload a room and chat with an AI interior designer.",
 };
 
@@ -31,7 +31,7 @@ export default function RootLayout({
               <div className="w-8 h-8 bg-stone-900 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-lg">I</span>
               </div>
-              <span className="font-semibold text-lg tracking-tight text-stone-900">InteriorFlow</span>
+              <span className="font-semibold text-lg tracking-tight text-stone-900">Decor AI</span>
             </div>
           </header>
 
