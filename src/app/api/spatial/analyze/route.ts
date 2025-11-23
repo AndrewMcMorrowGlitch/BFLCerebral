@@ -274,30 +274,30 @@ function computeProportions(spatial: SpatialAnalysis): EnrichedSpatialAnalysis {
           label: sofa.label ?? 'sofa',
           width_ratio: sofa.box.width,
           height_ratio: sofa.box.height,
-        }
+        } as SpatialMeasurement
       : null,
     averageWalkway
       ? {
           id: 'walkway-avg',
           label: 'average walkway width',
           width_ratio: averageWalkway,
-        }
+        } as SpatialMeasurement
       : null,
     windows.length
       ? {
           id: 'windows-total',
           label: 'total window width',
           width_ratio: windows.reduce((sum, win) => sum + win.box.width, 0),
-        }
+        } as SpatialMeasurement
       : null,
     doors.length
       ? {
           id: 'doors-total',
           label: 'door width',
           width_ratio: doors.reduce((sum, door) => sum + door.box.width, 0),
-        }
+        } as SpatialMeasurement
       : null,
-  ].filter((value): value is SpatialMeasurement => Boolean(value));
+  ].filter(Boolean) as SpatialMeasurement[];
 
   return {
     ...spatial,
