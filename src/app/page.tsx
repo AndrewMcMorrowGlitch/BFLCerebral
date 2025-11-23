@@ -113,10 +113,45 @@ export default function Home() {
         };
         setMessages(prev => [...prev, aiMessageObj]);
 
-        // Analyze products in the background
-        if (activeProject.original_image_url) {
-          analyzeProducts(activeProject.original_image_url, data.imageUrl);
-        }
+        // Add mock products for UI demonstration
+        setActiveProject(prev => prev ? ({
+          ...prev,
+          products: [
+            {
+              name: "Modern Velvet Sofa",
+              category: "Furniture",
+              quantity: 1,
+              description: "Contemporary blue velvet 3-seater sofa with gold legs",
+              searchTerms: ["blue velvet sofa", "modern couch", "velvet 3 seater"]
+            },
+            {
+              name: "Abstract Canvas Wall Art",
+              category: "Decor",
+              quantity: 2,
+              description: "Large abstract paintings for living room wall",
+              searchTerms: ["abstract wall art", "large canvas painting", "modern wall decor"]
+            },
+            {
+              name: "Gold Floor Lamp",
+              category: "Lighting",
+              quantity: 1,
+              description: "Modern arc floor lamp with marble base",
+              searchTerms: ["gold arc floor lamp", "modern standing lamp", "marble floor lamp"]
+            },
+            {
+              name: "Decorative Throw Pillows",
+              category: "Accessories",
+              quantity: 4,
+              description: "Textured cushions in complementary colors",
+              searchTerms: ["throw pillows set", "decorative cushions", "velvet pillows"]
+            }
+          ]
+        }) : null);
+
+        // Analyze products in the background (disabled - add GOOGLE_API_KEY to enable)
+        // if (activeProject.original_image_url) {
+        //   analyzeProducts(activeProject.original_image_url, data.imageUrl);
+        // }
       } else {
         throw new Error(data.warning || 'No image returned');
       }
@@ -277,15 +312,24 @@ export default function Home() {
 
         {/* Products Section */}
         {activeProject.products && activeProject.products.length > 0 && (
-          <div className="border-t border-stone-100 bg-stone-50 p-4 lg:p-6 max-h-[300px] overflow-y-auto">
-            <div className="flex items-center gap-2 mb-4">
-              <Package className="w-5 h-5 text-stone-700" />
-              <h3 className="font-semibold text-stone-900">Suggested Products</h3>
-              <span className="text-xs text-stone-500 bg-stone-200 px-2 py-1 rounded-full">
-                {activeProject.products.length} items
-              </span>
+          <div className="border-t border-stone-200 bg-gradient-to-b from-stone-50 to-white">
+            <div className="p-4 lg:p-5 border-b border-stone-100 bg-white/50 backdrop-blur-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-blue-50">
+                    <Package className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-sm text-stone-900">Shopping List</h3>
+                    <p className="text-xs text-stone-500">Items to recreate this design</p>
+                  </div>
+                </div>
+                <span className="text-xs font-medium text-stone-600 bg-stone-100 px-3 py-1.5 rounded-full">
+                  {activeProject.products.length} {activeProject.products.length === 1 ? 'item' : 'items'}
+                </span>
+              </div>
             </div>
-            <div className="space-y-3">
+            <div className="p-3 lg:p-4 max-h-[280px] overflow-y-auto space-y-2 custom-scrollbar">
               {activeProject.products.map((product, idx) => (
                 <ProductCard key={idx} product={product} />
               ))}
