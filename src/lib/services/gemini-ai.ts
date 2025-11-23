@@ -152,7 +152,7 @@ function parseProductsFromGeminiResponse(response: string, theme: string): Produ
     );
   }
 
-  const colorScheme = theme.toLowerCase() === 'halloween' 
+  const colorScheme = theme.toLowerCase() === 'halloween'
     ? ['black', 'orange', 'white', 'gray']
     : ['varies'];
 

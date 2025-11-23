@@ -910,10 +910,78 @@ const ProportionOverlay = ({
   data: SpatialInsights;
   highlightedRegion: string | null;
 }) => {
+  const [imageMetrics, setImageMetrics] = React.useState({
+    scale: 1,
+    offsetX: 0,
+    offsetY: 0,
+    renderedWidth: 100,
+    renderedHeight: 100,
+  });
+  const svgRef = React.useRef<SVGSVGElement>(null);
+
+  React.useEffect(() => {
+    const img = document.getElementById('main-canvas-image') as HTMLImageElement;
+    if (!img) return;
+
+    const updateMetrics = () => {
+      const container = img.parentElement;
+      if (!container || !img.naturalWidth || !img.naturalHeight) return;
+
+      const containerWidth = container.clientWidth;
+      const containerHeight = container.clientHeight;
+      const imageAspect = img.naturalWidth / img.naturalHeight;
+      const containerAspect = containerWidth / containerHeight;
+
+      let renderedWidth, renderedHeight, offsetX, offsetY;
+
+      if (imageAspect > containerAspect) {
+        // Image is wider - fits to width with vertical letterboxing
+        renderedWidth = containerWidth;
+        renderedHeight = containerWidth / imageAspect;
+        offsetX = 0;
+        offsetY = (containerHeight - renderedHeight) / 2;
+      } else {
+        // Image is taller - fits to height with horizontal pillarboxing
+        renderedHeight = containerHeight;
+        renderedWidth = containerHeight * imageAspect;
+        offsetX = (containerWidth - renderedWidth) / 2;
+        offsetY = 0;
+      }
+
+      setImageMetrics({
+        scale: renderedWidth / containerWidth,
+        offsetX: (offsetX / containerWidth) * 100,
+        offsetY: (offsetY / containerHeight) * 100,
+        renderedWidth: (renderedWidth / containerWidth) * 100,
+        renderedHeight: (renderedHeight / containerHeight) * 100,
+      });
+    };
+
+    if (img.complete) {
+      updateMetrics();
+    } else {
+      img.addEventListener('load', updateMetrics);
+    }
+
+    window.addEventListener('resize', updateMetrics);
+    return () => {
+      img.removeEventListener('load', updateMetrics);
+      window.removeEventListener('resize', updateMetrics);
+    };
+  }, []);
+
   const clamp = (value: number) => Math.max(0, Math.min(1, value));
-  const toPoint = (value: number) => clamp(value) * 100;
+
+  // Convert normalized positions to SVG coordinates (with offset)
+  const toPosX = (value: number) => imageMetrics.offsetX + clamp(value) * imageMetrics.renderedWidth;
+  const toPosY = (value: number) => imageMetrics.offsetY + clamp(value) * imageMetrics.renderedHeight;
+
+  // Convert normalized dimensions to SVG coordinates (no offset!)
+  const toSizeX = (value: number) => clamp(value) * imageMetrics.renderedWidth;
+  const toSizeY = (value: number) => clamp(value) * imageMetrics.renderedHeight;
+
   const pointsToString = (points: Array<{ x: number; y: number }>) =>
-    points.map((p) => `${toPoint(p.x)},${toPoint(p.y)}`).join(' ');
+    points.map((p) => `${toPosX(p.x)},${toPosY(p.y)}`).join(' ');
   const approxFeet = (ratio?: number | null, base = 14) =>
     ratio ? (ratio * base).toFixed(1) : null;
   const isHighlighted = (id?: string) =>
@@ -966,17 +1034,18 @@ const ProportionOverlay = ({
   return (
     <div className="absolute inset-0 pointer-events-none z-10">
       <svg
+        ref={svgRef}
         className="absolute inset-0 w-full h-full"
         viewBox="0 0 100 100"
-        preserveAspectRatio="xMidYMid meet"
+        preserveAspectRatio="none"
       >
         {data.empty_zones?.map((zone) => (
           <rect
             key={zone.id}
-            x={toPoint(zone.box.x)}
-            y={toPoint(zone.box.y)}
-            width={toPoint(zone.box.width)}
-            height={toPoint(zone.box.height)}
+            x={toPosX(zone.box.x)}
+            y={toPosY(zone.box.y)}
+            width={toSizeX(zone.box.width)}
+            height={toSizeY(zone.box.height)}
             fill="#f9731688"
             stroke={isHighlighted(zone.id) ? '#f97316' : '#ea580c'}
             strokeWidth={isHighlighted(zone.id) ? 1 : 0.3}
@@ -987,10 +1056,10 @@ const ProportionOverlay = ({
         {data.windows?.map((window) => (
           <rect
             key={window.id}
-            x={toPoint(window.box.x)}
-            y={toPoint(window.box.y)}
-            width={toPoint(window.box.width)}
-            height={toPoint(window.box.height)}
+            x={toPosX(window.box.x)}
+            y={toPosY(window.box.y)}
+            width={toSizeX(window.box.width)}
+            height={toSizeY(window.box.height)}
             fill="#38bdf899"
             stroke={isHighlighted(window.id) ? '#f97316' : '#0ea5e9'}
             strokeWidth={isHighlighted(window.id) ? 1 : 0.45}
@@ -1000,10 +1069,10 @@ const ProportionOverlay = ({
         {data.doors?.map((door) => (
           <rect
             key={door.id}
-            x={toPoint(door.box.x)}
-            y={toPoint(door.box.y)}
-            width={toPoint(door.box.width)}
-            height={toPoint(door.box.height)}
+            x={toPosX(door.box.x)}
+            y={toPosY(door.box.y)}
+            width={toSizeX(door.box.width)}
+            height={toSizeY(door.box.height)}
             fill="none"
             stroke={isHighlighted(door.id) ? '#f97316' : '#6366f1'}
             strokeWidth={isHighlighted(door.id) ? 1 : 0.5}
@@ -1011,10 +1080,10 @@ const ProportionOverlay = ({
           />
         ))}
         {data.furniture?.map((item) => {
-          const x = toPoint(item.box?.x ?? 0);
-          const y = toPoint(item.box?.y ?? 0);
-          const width = toPoint(item.box?.width ?? 0);
-          const height = toPoint(item.box?.height ?? 0);
+          const x = toPosX(item.box?.x ?? 0);
+          const y = toPosY(item.box?.y ?? 0);
+          const width = toSizeX(item.box?.width ?? 0);
+          const height = toSizeY(item.box?.height ?? 0);
           if ([x, y, width, height].some((value) => Number.isNaN(value))) {
             return null;
           }
@@ -1059,10 +1128,10 @@ const ProportionOverlay = ({
         {data.obstructions?.map((obs) => (
           <rect
             key={obs.id}
-            x={toPoint(obs.box.x)}
-            y={toPoint(obs.box.y)}
-            width={toPoint(obs.box.width)}
-            height={toPoint(obs.box.height)}
+            x={toPosX(obs.box.x)}
+            y={toPosY(obs.box.y)}
+            width={toSizeX(obs.box.width)}
+            height={toSizeY(obs.box.height)}
             fill="#ef444466"
             stroke={isHighlighted(obs.id) ? '#f97316' : '#b91c1c'}
             strokeWidth={isHighlighted(obs.id) ? 1 : 0.5}
