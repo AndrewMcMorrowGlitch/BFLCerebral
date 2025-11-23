@@ -1,25 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
+import type { Product, ProductAnalysisResult } from '@/types/decoration';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-
-export interface Product {
-  name: string;
-  category: string;
-  quantity?: number;
-  description: string;
-  searchTerms: string[];
-  linkUrl?: string;
-  imageUrl?: string;
-  price?: string;
-  asin?: string;
-}
-
-export interface ProductAnalysisResult {
-  products: Product[];
-  overallTheme: string;
-  colorScheme: string[];
-  estimatedTotalItems: number;
-}
 
 export async function analyzeProducts(
   originalImage: string,

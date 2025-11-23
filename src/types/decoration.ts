@@ -35,6 +35,13 @@ export interface ProductAnalysisResponse {
   };
 }
 
+export interface ProductAnalysisResult {
+  products: Product[];
+  overallTheme: string;
+  colorScheme: string[];
+  estimatedTotalItems: number;
+}
+
 export type DecorationTheme = 
   | 'halloween'
   | 'christmas'

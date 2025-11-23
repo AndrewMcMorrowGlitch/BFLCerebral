@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { Product, ProductAnalysisResult } from '@/types/decoration';
+import type { Product, ProductAnalysisResult } from '@/types/decoration';
 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 
