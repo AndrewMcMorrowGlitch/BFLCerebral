@@ -56,6 +56,24 @@ type SpatialPath = {
   label?: string;
 };
 
+type SpatialMeasurement = {
+  id: string;
+  label?: string;
+  description?: string;
+  width_ratio?: number;
+  height_ratio?: number;
+  region_ref?: string;
+};
+
+type ProportionMetrics = {
+  sofa_room_width_ratio?: number | null;
+  sofa_room_height_ratio?: number | null;
+  walkway_width_ratio?: number | null;
+  estimated_room_depth?: number | null;
+  window_wall_ratio?: number | null;
+  door_wall_ratio?: number | null;
+};
+
 type SpatialInsights = {
   windows?: SpatialRegion[];
   doors?: SpatialRegion[];
@@ -68,6 +86,28 @@ type SpatialInsights = {
     notes?: string[];
     circulation?: string[];
   };
+  proportions?: ProportionMetrics;
+  measurements?: SpatialMeasurement[];
+};
+
+type DesignSuggestionEntry = {
+  id: string;
+  description: string;
+  region_ref?: string;
+};
+
+type ProductSuggestion = {
+  id: string;
+  query: string;
+  notes?: string;
+  region_ref?: string;
+};
+
+type DesignSuggestions = {
+  layout_issues?: DesignSuggestionEntry[];
+  improvement_suggestions?: DesignSuggestionEntry[];
+  product_suggestions?: ProductSuggestion[];
+  measurements?: DesignSuggestionEntry[];
 };
 
 export default function Home() {
@@ -79,6 +119,11 @@ export default function Home() {
   const [spatialDataMap, setSpatialDataMap] = useState<Record<string, SpatialInsights>>({});
   const [spatialLoading, setSpatialLoading] = useState(false);
   const [spatialError, setSpatialError] = useState<string | null>(null);
+  const [designSuggestionsMap, setDesignSuggestionsMap] = useState<Record<string, DesignSuggestions>>({});
+  const [designSuggestionsLoading, setDesignSuggestionsLoading] = useState(false);
+  const [designSuggestionsError, setDesignSuggestionsError] = useState<string | null>(null);
+  const [highlightedRegion, setHighlightedRegion] = useState<string | null>(null);
+  const [suggestionsCollapsed, setSuggestionsCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Scroll to bottom of chat
@@ -94,6 +139,9 @@ export default function Home() {
     setSpatialViewEnabled(false);
     setSpatialError(null);
     setSpatialLoading(false);
+    setDesignSuggestionsError(null);
+    setDesignSuggestionsLoading(false);
+    setHighlightedRegion(null);
   }, [activeProject?.current_image_url]);
 
   const handleUploadComplete = (url: string) => {
@@ -114,11 +162,11 @@ export default function Home() {
     ]);
   };
 
-  const fetchSpatialInsights = async () => {
+  const fetchSpatialInsights = async (): Promise<SpatialInsights | undefined> => {
     if (!activeProject) return;
     const key = activeProject.current_image_url;
     if (spatialDataMap[key]) {
-      return;
+      return spatialDataMap[key];
     }
 
     setSpatialLoading(true);
@@ -142,13 +190,55 @@ export default function Home() {
         ...prev,
         [key]: data,
       }));
+      return data;
     } catch (error) {
       console.error('Spatial analysis error', error);
       setSpatialError(
         error instanceof Error ? error.message : 'Spatial analysis failed',
       );
+      return;
     } finally {
       setSpatialLoading(false);
+    }
+  };
+
+  const fetchDesignSuggestions = async (spatialOverride?: SpatialInsights) => {
+    if (!activeProject) return;
+    const key = activeProject.current_image_url;
+    if (designSuggestionsMap[key]) {
+      return;
+    }
+    const spatial = spatialOverride ?? spatialDataMap[key];
+    if (!spatial) {
+      return;
+    }
+    try {
+      setDesignSuggestionsLoading(true);
+      setDesignSuggestionsError(null);
+      const response = await fetch('/api/design/suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageUrl: key,
+          spatialJson: spatial,
+        }),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || 'Design suggestions failed');
+      }
+      const data = await response.json();
+      setDesignSuggestionsMap((prev) => ({
+        ...prev,
+        [key]: data,
+      }));
+    } catch (error) {
+      console.error('Design suggestions error', error);
+      setDesignSuggestionsError(
+        error instanceof Error ? error.message : 'Design suggestions failed',
+      );
+    } finally {
+      setDesignSuggestionsLoading(false);
     }
   };
 
@@ -156,7 +246,11 @@ export default function Home() {
     const next = !spatialViewEnabled;
     setSpatialViewEnabled(next);
     if (next) {
-      fetchSpatialInsights();
+      fetchSpatialInsights().then((data) => {
+        fetchDesignSuggestions(data);
+      });
+    } else {
+      setHighlightedRegion(null);
     }
   };
 
@@ -304,6 +398,13 @@ export default function Home() {
   const currentSpatialData = activeProject
     ? spatialDataMap[activeProject.current_image_url]
     : null;
+  const currentDesignSuggestions = activeProject
+    ? designSuggestionsMap[activeProject.current_image_url]
+    : null;
+  const showDesignPanel =
+    Boolean(currentDesignSuggestions) ||
+    designSuggestionsLoading ||
+    Boolean(designSuggestionsError);
 
   // Empty State / Upload
   if (!activeProject) {
@@ -427,8 +528,8 @@ export default function Home() {
     <div className="min-h-[calc(100vh-64px)] flex flex-col lg:flex-row overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-white">
 
       {/* LEFT: Canvas / Image Preview */}
-      <div className="w-full lg:w-[58%] h-[45vh] lg:h-full relative bg-gradient-to-br from-slate-100 via-white to-blue-50/30 flex items-center justify-center p-8 lg:p-16 border-b lg:border-b-0 lg:border-r border-slate-200/50">
-        <div className="relative w-full h-full max-h-[85vh] flex items-center justify-center">
+      <div className="w-full lg:w-[58%] h-[45vh] lg:h-full relative bg-gradient-to-br from-slate-100 via-white to-blue-50/30 flex flex-col gap-6 p-8 lg:p-16 border-b lg:border-b-0 lg:border-r border-slate-200/50">
+        <div className="relative w-full h-full max-h-[85vh] flex-1 flex items-center justify-center">
           {/* Decorative Elements */}
           <div className="absolute top-10 left-10 w-32 h-32 bg-blue-200/20 rounded-full mix-blend-multiply filter blur-2xl" />
           <div className="absolute bottom-10 right-10 w-32 h-32 bg-purple-200/20 rounded-full mix-blend-multiply filter blur-2xl" />
@@ -436,7 +537,7 @@ export default function Home() {
           {/* Image Container */}
           <div className="relative w-full h-full rounded-[2rem] overflow-hidden bg-white shadow-2xl shadow-slate-900/10 ring-1 ring-slate-900/5 transition-all duration-500 hover:shadow-3xl hover:shadow-slate-900/20">
             <div className="absolute top-5 right-5 z-20 flex items-center gap-3 bg-white/90 backdrop-blur-xl px-4 py-2 rounded-2xl border border-slate-200/70 shadow-lg">
-              <span className="text-xs font-semibold text-slate-700">Spatial view</span>
+              <span className="text-xs font-semibold text-slate-700">Proportion Mode</span>
               <button
                 onClick={handleSpatialToggle}
                 className={cn(
@@ -479,7 +580,12 @@ export default function Home() {
                     <p className="text-xs font-semibold">{spatialError}</p>
                   </div>
                 )}
-                {currentSpatialData && <SpatialOverlay data={currentSpatialData} />}
+                {currentSpatialData && (
+                  <ProportionOverlay
+                    data={currentSpatialData}
+                    highlightedRegion={highlightedRegion}
+                  />
+                )}
               </>
             )}
 
@@ -512,6 +618,104 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+        {showDesignPanel && (
+          <div className="w-full rounded-[1.75rem] bg-white/80 backdrop-blur-xl border border-slate-200/70 shadow-xl shadow-slate-200/60">
+            <div className="p-6 lg:p-7 border-b border-slate-200/60 flex items-center justify-between">
+              <div className="flex items-center gap-3.5">
+                <div className="p-3 rounded-2xl bg-gradient-to-br from-emerald-500 via-cyan-500 to-blue-500 shadow-lg shadow-emerald-200/50">
+                  <Sparkles className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">AI Design Improvements</h3>
+                  <p className="text-xs text-slate-600 font-medium">Spatial layout insights</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSuggestionsCollapsed((prev) => !prev)}
+                className="text-xs font-semibold text-slate-600 hover:text-slate-900"
+              >
+                {suggestionsCollapsed ? 'Expand' : 'Collapse'}
+              </button>
+            </div>
+            {!suggestionsCollapsed && (
+              <div className="p-5 lg:p-6 max-h-[260px] overflow-y-auto space-y-4 custom-scrollbar">
+                {designSuggestionsLoading && (
+                  <p className="text-xs text-slate-500">Analyzing layout...</p>
+                )}
+                {designSuggestionsError && (
+                  <p className="text-xs text-red-600 font-semibold">{designSuggestionsError}</p>
+                )}
+                {currentDesignSuggestions?.layout_issues?.length ? (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Layout issues</p>
+                    <div className="space-y-2">
+                      {currentDesignSuggestions.layout_issues.map((issue) => (
+                        <SuggestionCard
+                          key={issue.id}
+                          title="Issue"
+                          description={issue.description}
+                          regionRef={issue.region_ref}
+                          onHover={setHighlightedRegion}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {currentDesignSuggestions?.improvement_suggestions?.length ? (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Improvements</p>
+                    <div className="space-y-2">
+                      {currentDesignSuggestions.improvement_suggestions.map((item) => (
+                        <SuggestionCard
+                          key={item.id}
+                          title="Idea"
+                          description={item.description}
+                          regionRef={item.region_ref}
+                          onHover={setHighlightedRegion}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {currentDesignSuggestions?.measurements?.length ? (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Measurements</p>
+                    <div className="space-y-2">
+                      {currentDesignSuggestions.measurements.map((measurement) => (
+                        <SuggestionCard
+                          key={measurement.id}
+                          title="Measurement"
+                          description={measurement.description}
+                          regionRef={measurement.region_ref}
+                          onHover={setHighlightedRegion}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {currentDesignSuggestions?.product_suggestions?.length ? (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Product ideas</p>
+                    <div className="space-y-2">
+                      {currentDesignSuggestions.product_suggestions.map((product) => (
+                        <div
+                          key={product.id}
+                          className="rounded-xl border border-slate-200/70 bg-white/90 px-4 py-2 text-xs text-slate-700 font-medium"
+                        >
+                          <p>{product.query}</p>
+                          {product.notes && (
+                            <p className="text-slate-500 text-[11px]">{product.notes}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* RIGHT: Chat Interface */}
@@ -666,15 +870,73 @@ export default function Home() {
   );
 }
 
-const SpatialOverlay = ({ data }: { data: SpatialInsights }) => {
+const ProportionOverlay = ({
+  data,
+  highlightedRegion,
+}: {
+  data: SpatialInsights;
+  highlightedRegion: string | null;
+}) => {
   const clamp = (value: number) => Math.max(0, Math.min(1, value));
   const toPoint = (value: number) => clamp(value) * 100;
   const pointsToString = (points: Array<{ x: number; y: number }>) =>
     points.map((p) => `${toPoint(p.x)},${toPoint(p.y)}`).join(' ');
+  const approxFeet = (ratio?: number | null, base = 14) =>
+    ratio ? (ratio * base).toFixed(1) : null;
+  const isHighlighted = (id?: string) =>
+    !!(id && highlightedRegion && highlightedRegion === id);
+
+  const proportionInsights: string[] = [];
+  if (data.proportions?.sofa_room_width_ratio) {
+    proportionInsights.push(
+      `Sofa spans ${(data.proportions.sofa_room_width_ratio * 100).toFixed(0)}% of room width`,
+    );
+  }
+  if (data.proportions?.sofa_room_height_ratio) {
+    proportionInsights.push(
+      `Sofa height is ${(data.proportions.sofa_room_height_ratio * 100).toFixed(0)}% of frame`,
+    );
+  }
+  if (data.proportions?.walkway_width_ratio) {
+    const feet = approxFeet(data.proportions.walkway_width_ratio, 10);
+    proportionInsights.push(
+      `Walkway width approx ${feet ? `${feet} ft` : `${(data.proportions.walkway_width_ratio * 100).toFixed(0)}%`}`,
+    );
+  }
+  if (data.proportions?.window_wall_ratio) {
+    proportionInsights.push(
+      `Windows cover ${(data.proportions.window_wall_ratio * 100).toFixed(0)}% of the wall`,
+    );
+  }
+  if (data.proportions?.door_wall_ratio) {
+    proportionInsights.push(
+      `Doors occupy ${(data.proportions.door_wall_ratio * 100).toFixed(0)}% of width`,
+    );
+  }
+  if (data.proportions?.estimated_room_depth) {
+    const depthFeet = approxFeet(data.proportions.estimated_room_depth, 16);
+    proportionInsights.push(
+      `Estimated room depth ≈ ${depthFeet ? `${depthFeet} ft` : 'balanced perspective'}`,
+    );
+  }
+  data.measurements?.forEach((measurement) => {
+    const ratio = measurement.width_ratio ?? measurement.height_ratio;
+    if (measurement.description) {
+      proportionInsights.push(measurement.description);
+    } else if (measurement.label && ratio) {
+      proportionInsights.push(
+        `${measurement.label} ≈ ${(ratio * 100).toFixed(0)}% of frame`,
+      );
+    }
+  });
 
   return (
     <div className="absolute inset-0 pointer-events-none z-10">
-      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+      <svg
+        className="absolute inset-0 w-full h-full"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+      >
         {data.empty_zones?.map((zone) => (
           <rect
             key={zone.id}
@@ -682,11 +944,11 @@ const SpatialOverlay = ({ data }: { data: SpatialInsights }) => {
             y={toPoint(zone.box.y)}
             width={toPoint(zone.box.width)}
             height={toPoint(zone.box.height)}
-            fill="#f9731699"
-            stroke="#ea580c"
-            strokeWidth={0.3}
+            fill="#f9731688"
+            stroke={isHighlighted(zone.id) ? '#f97316' : '#ea580c'}
+            strokeWidth={isHighlighted(zone.id) ? 1 : 0.3}
             strokeDasharray="1.5 1.5"
-            opacity={0.2}
+            opacity={0.3}
           />
         ))}
         {data.windows?.map((window) => (
@@ -697,8 +959,8 @@ const SpatialOverlay = ({ data }: { data: SpatialInsights }) => {
             width={toPoint(window.box.width)}
             height={toPoint(window.box.height)}
             fill="#38bdf899"
-            stroke="#0ea5e9"
-            strokeWidth={0.4}
+            stroke={isHighlighted(window.id) ? '#f97316' : '#0ea5e9'}
+            strokeWidth={isHighlighted(window.id) ? 1 : 0.45}
             opacity={0.35}
           />
         ))}
@@ -710,8 +972,8 @@ const SpatialOverlay = ({ data }: { data: SpatialInsights }) => {
             width={toPoint(door.box.width)}
             height={toPoint(door.box.height)}
             fill="none"
-            stroke="#6366f1"
-            strokeWidth={0.5}
+            stroke={isHighlighted(door.id) ? '#f97316' : '#6366f1'}
+            strokeWidth={isHighlighted(door.id) ? 1 : 0.5}
             strokeDasharray="1 1"
           />
         ))}
@@ -723,8 +985,8 @@ const SpatialOverlay = ({ data }: { data: SpatialInsights }) => {
               width={toPoint(item.box.width)}
               height={toPoint(item.box.height)}
               fill="none"
-              stroke="#2563eb"
-              strokeWidth={0.6}
+              stroke={isHighlighted(item.id) ? '#f97316' : '#2563eb'}
+              strokeWidth={isHighlighted(item.id) ? 1.2 : 0.6}
               rx={0.8}
             />
             {item.label && (
@@ -746,8 +1008,8 @@ const SpatialOverlay = ({ data }: { data: SpatialInsights }) => {
             key={path.id}
             points={pointsToString(path.points)}
             fill="none"
-            stroke="#22c55e"
-            strokeWidth={0.7}
+            stroke={isHighlighted(path.id) ? '#f97316' : '#22c55e'}
+            strokeWidth={isHighlighted(path.id) ? 1.1 : 0.7}
             strokeDasharray="2 1"
             opacity={0.85}
           />
@@ -760,35 +1022,109 @@ const SpatialOverlay = ({ data }: { data: SpatialInsights }) => {
             width={toPoint(obs.box.width)}
             height={toPoint(obs.box.height)}
             fill="#ef444466"
-            stroke="#b91c1c"
-            strokeWidth={0.5}
+            stroke={isHighlighted(obs.id) ? '#f97316' : '#b91c1c'}
+            strokeWidth={isHighlighted(obs.id) ? 1 : 0.5}
           />
         ))}
+        {data.measurements?.map((measurement, idx) => {
+          const ratio = measurement.width_ratio ?? measurement.height_ratio;
+          if (!ratio) return null;
+          const y = 92 - idx * 4;
+          const label = measurement.label ?? measurement.id;
+          const feet = approxFeet(ratio);
+          return (
+            <g key={measurement.id}>
+              <line
+                x1={5}
+                x2={5 + ratio * 90}
+                y1={y}
+                y2={y}
+                stroke="#0ea5e9"
+                strokeWidth={0.35}
+                strokeDasharray="1 1"
+              />
+              <text
+                x={5 + (ratio * 90) / 2}
+                y={y - 1}
+                textAnchor="middle"
+                fill="#0f172a"
+                fontSize="2"
+                fontWeight="600"
+              >
+                {label} · {feet ? `${feet} ft` : `${(ratio * 100).toFixed(0)}%`}
+              </text>
+            </g>
+          );
+        })}
       </svg>
-      {(data.metadata?.notes?.length || data.depth_cues?.length) && (
-        <div className="absolute bottom-4 left-4 bg-white/90 px-3 py-2 rounded-lg text-xs text-slate-700 shadow">
-          {data.metadata?.notes && data.metadata.notes.length > 0 && (
-            <>
-              <p className="font-semibold mb-1">Spatial notes</p>
-              <ul className="list-disc list-inside space-y-0.5 mb-1">
-                {data.metadata.notes.map((note, idx) => (
-                  <li key={`note-${idx}`}>{note}</li>
-                ))}
-              </ul>
-            </>
-          )}
-          {data.depth_cues && data.depth_cues.length > 0 && (
-            <>
-              <p className="font-semibold mt-1 mb-1">Depth cues</p>
-              <ul className="list-disc list-inside space-y-0.5">
-                {data.depth_cues.map((cue, idx) => (
-                  <li key={`cue-${idx}`}>{cue}</li>
-                ))}
-              </ul>
-            </>
-          )}
+      {(proportionInsights.length ||
+        data.metadata?.notes?.length ||
+        data.depth_cues?.length) && (
+        <div className="absolute bottom-4 left-4 bg-white/95 px-4 py-3 rounded-xl text-xs text-slate-700 shadow max-w-[65%] border border-slate-200/80">
+          <div className="space-y-2">
+            {proportionInsights.length > 0 && (
+              <div>
+                <p className="font-semibold uppercase tracking-wide text-[10px] text-slate-500 mb-1">
+                  Proportion insights
+                </p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  {proportionInsights.slice(0, 6).map((insight, idx) => (
+                    <li key={`prop-${idx}`}>{insight}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {data.metadata?.notes && data.metadata.notes.length > 0 && (
+              <div>
+                <p className="font-semibold uppercase tracking-wide text-[10px] text-slate-500 mb-1">
+                  Spatial notes
+                </p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  {data.metadata.notes.map((note, idx) => (
+                    <li key={`note-${idx}`}>{note}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {data.depth_cues && data.depth_cues.length > 0 && (
+              <div>
+                <p className="font-semibold uppercase tracking-wide text-[10px] text-slate-500 mb-1">
+                  Depth cues
+                </p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  {data.depth_cues.map((cue, idx) => (
+                    <li key={`cue-${idx}`}>{cue}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
   );
 };
+
+const SuggestionCard = ({
+  title,
+  description,
+  regionRef,
+  onHover,
+}: {
+  title: string;
+  description: string;
+  regionRef?: string;
+  onHover: (region: string | null) => void;
+}) => (
+  <div
+    className="rounded-xl border border-slate-200/70 bg-white/90 px-4 py-3 text-xs text-slate-700 font-medium hover:border-blue-300 hover:shadow-md transition-all cursor-pointer"
+    onMouseEnter={() => onHover(regionRef ?? null)}
+    onMouseLeave={() => onHover(null)}
+  >
+    <p className="text-[11px] font-semibold uppercase text-slate-500 mb-1">{title}</p>
+    <p>{description}</p>
+    {regionRef && (
+      <p className="text-[11px] text-slate-400 mt-1">Region: {regionRef}</p>
+    )}
+  </div>
+);
