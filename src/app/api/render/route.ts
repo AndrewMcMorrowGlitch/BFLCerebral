@@ -1,10 +1,25 @@
 import { NextResponse } from 'next/server';
-import * as fal from '@fal-ai/serverless-client';
+import { fal } from '@fal-ai/client';
 
-// Configure FAL client
-fal.config({
-  credentials: process.env.FAL_KEY,
-});
+const FAL_ENDPOINT = 'fal-ai/beta-image-232/edit';
+const CUSTOM_IMAGE_SIZE = { width: 1920, height: 1080 };
+
+const ensureFalConfigured = (() => {
+  let configured = false;
+  return () => {
+    if (configured) {
+      return;
+    }
+    const falKey = process.env.FAL_KEY;
+    if (!falKey) {
+      throw new Error('FAL_KEY is not configured');
+    }
+    fal.config({
+      credentials: falKey,
+    });
+    configured = true;
+  };
+})();
 
 export async function POST(request: Request) {
   try {
@@ -26,39 +41,38 @@ export async function POST(request: Request) {
       });
     }
 
-    console.log('Starting image generation with prompt:', prompt);
+    ensureFalConfigured();
 
-    // Call FAL API using the SDK
-    const result = await fal.subscribe('fal-ai/flux/dev/image-to-image', {
-      input: {
-        prompt: prompt,
-        image_url: imageUrl,
-        strength: 0.75, // Moderate strength for visible changes while keeping room structure
-        guidance_scale: 3.5,
-        num_inference_steps: 28,
-        enable_safety_checker: false,
-      },
-      logs: true,
-      onQueueUpdate: (update) => {
-        if (update.status === 'IN_PROGRESS') {
-          console.log('Generation in progress...');
-        }
-      },
-    });
-
-    console.log('FAL API response:', result);
-
-    if (result.data && result.data.images && result.data.images.length > 0) {
-      return NextResponse.json({
-        imageUrl: result.data.images[0].url
+    try {
+      const result = await fal.subscribe(FAL_ENDPOINT, {
+        input: {
+          prompt,
+          image_urls: [imageUrl],
+          guidance_scale: 6,
+          num_inference_steps: 40,
+          num_images: 1,
+          image_size: CUSTOM_IMAGE_SIZE,
+          enable_prompt_expansion: false,
+          enable_safety_checker: false,
+          output_format: 'png',
+        },
       });
-    }
 
-    console.error('No image returned from FAL');
-    return NextResponse.json({
-      imageUrl: imageUrl,
-      warning: 'No image generated'
-    });
+      const output = (result as any)?.data ?? result;
+      const generatedUrl =
+        (Array.isArray(output?.images) && output.images[0]?.url) ||
+        output?.image?.url;
+
+      if (generatedUrl) {
+        return NextResponse.json({ imageUrl: generatedUrl });
+      }
+
+      console.warn('FAL result missing images; returning original image.');
+      return NextResponse.json({ imageUrl, warning: 'FAL result did not include an image.' });
+    } catch (falError) {
+      console.error('FAL request failed:', falError);
+      return NextResponse.json({ imageUrl, warning: 'Generation failed on server.' });
+    }
 
   } catch (error: any) {
     console.error('Error in /api/render:', error);
