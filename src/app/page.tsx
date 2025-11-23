@@ -36,11 +36,49 @@ interface Project {
   products?: Product[];
 }
 
+type SpatialBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type SpatialRegion = {
+  id: string;
+  label?: string;
+  box: SpatialBox;
+  note?: string;
+};
+
+type SpatialPath = {
+  id: string;
+  points: Array<{ x: number; y: number }>;
+  label?: string;
+};
+
+type SpatialInsights = {
+  windows?: SpatialRegion[];
+  doors?: SpatialRegion[];
+  furniture?: SpatialRegion[];
+  walkways?: SpatialPath[];
+  empty_zones?: SpatialRegion[];
+  obstructions?: SpatialRegion[];
+  depth_cues?: string[];
+  metadata?: {
+    notes?: string[];
+    circulation?: string[];
+  };
+};
+
 export default function Home() {
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [isAiThinking, setIsAiThinking] = useState(false);
+  const [spatialViewEnabled, setSpatialViewEnabled] = useState(false);
+  const [spatialDataMap, setSpatialDataMap] = useState<Record<string, SpatialInsights>>({});
+  const [spatialLoading, setSpatialLoading] = useState(false);
+  const [spatialError, setSpatialError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Scroll to bottom of chat
@@ -51,6 +89,12 @@ export default function Home() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    setSpatialViewEnabled(false);
+    setSpatialError(null);
+    setSpatialLoading(false);
+  }, [activeProject?.current_image_url]);
 
   const handleUploadComplete = (url: string) => {
     const newProject: Project = {
@@ -68,6 +112,52 @@ export default function Home() {
         type: 'text',
       },
     ]);
+  };
+
+  const fetchSpatialInsights = async () => {
+    if (!activeProject) return;
+    const key = activeProject.current_image_url;
+    if (spatialDataMap[key]) {
+      return;
+    }
+
+    setSpatialLoading(true);
+    setSpatialError(null);
+    try {
+      const response = await fetch('/api/spatial/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageUrl: key,
+        }),
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || 'Spatial analysis failed');
+      }
+
+      const data = await response.json();
+      setSpatialDataMap((prev) => ({
+        ...prev,
+        [key]: data,
+      }));
+    } catch (error) {
+      console.error('Spatial analysis error', error);
+      setSpatialError(
+        error instanceof Error ? error.message : 'Spatial analysis failed',
+      );
+    } finally {
+      setSpatialLoading(false);
+    }
+  };
+
+  const handleSpatialToggle = () => {
+    const next = !spatialViewEnabled;
+    setSpatialViewEnabled(next);
+    if (next) {
+      fetchSpatialInsights();
+    }
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -211,6 +301,10 @@ export default function Home() {
     }
   };
 
+  const currentSpatialData = activeProject
+    ? spatialDataMap[activeProject.current_image_url]
+    : null;
+
   // Empty State / Upload
   if (!activeProject) {
     return (
@@ -341,6 +435,23 @@ export default function Home() {
 
           {/* Image Container */}
           <div className="relative w-full h-full rounded-[2rem] overflow-hidden bg-white shadow-2xl shadow-slate-900/10 ring-1 ring-slate-900/5 transition-all duration-500 hover:shadow-3xl hover:shadow-slate-900/20">
+            <div className="absolute top-5 right-5 z-20 flex items-center gap-3 bg-white/90 backdrop-blur-xl px-4 py-2 rounded-2xl border border-slate-200/70 shadow-lg">
+              <span className="text-xs font-semibold text-slate-700">Spatial view</span>
+              <button
+                onClick={handleSpatialToggle}
+                className={cn(
+                  'relative w-12 h-6 rounded-full transition-colors duration-300',
+                  spatialViewEnabled ? 'bg-blue-600' : 'bg-slate-300',
+                )}
+              >
+                <span
+                  className={cn(
+                    'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-300',
+                    spatialViewEnabled ? 'translate-x-6' : '',
+                  )}
+                />
+              </button>
+            </div>
             {/* Main Image */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -349,6 +460,28 @@ export default function Home() {
               alt="Current Room"
               className="w-full h-full object-contain bg-gradient-to-br from-white via-slate-50/30 to-white"
             />
+            {spatialViewEnabled && (
+              <>
+                {spatialLoading && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm z-20">
+                    <div className="flex flex-col items-center gap-2 text-slate-700">
+                      <div className="flex gap-1">
+                        <span className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" />
+                        <span className="w-2 h-2 rounded-full bg-purple-500 animate-bounce" style={{ animationDelay: '0.15s' }} />
+                        <span className="w-2 h-2 rounded-full bg-pink-500 animate-bounce" style={{ animationDelay: '0.3s' }} />
+                      </div>
+                      <p className="text-xs font-semibold uppercase tracking-wide">Analyzing spatial layout...</p>
+                    </div>
+                  </div>
+                )}
+                {spatialError && !spatialLoading && (
+                  <div className="absolute top-24 left-1/2 -translate-x-1/2 bg-white/95 border border-red-200 text-red-600 px-4 py-2 rounded-xl shadow z-20">
+                    <p className="text-xs font-semibold">{spatialError}</p>
+                  </div>
+                )}
+                {currentSpatialData && <SpatialOverlay data={currentSpatialData} />}
+              </>
+            )}
 
             {/* Floating Action Bar */}
             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-3 bg-white/98 backdrop-blur-2xl p-3 rounded-[1.25rem] border border-slate-200/60 shadow-2xl shadow-slate-900/10 opacity-0 hover:opacity-100 transition-all duration-300 hover:scale-105 group">
@@ -532,3 +665,130 @@ export default function Home() {
     </div>
   );
 }
+
+const SpatialOverlay = ({ data }: { data: SpatialInsights }) => {
+  const clamp = (value: number) => Math.max(0, Math.min(1, value));
+  const toPoint = (value: number) => clamp(value) * 100;
+  const pointsToString = (points: Array<{ x: number; y: number }>) =>
+    points.map((p) => `${toPoint(p.x)},${toPoint(p.y)}`).join(' ');
+
+  return (
+    <div className="absolute inset-0 pointer-events-none z-10">
+      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+        {data.empty_zones?.map((zone) => (
+          <rect
+            key={zone.id}
+            x={toPoint(zone.box.x)}
+            y={toPoint(zone.box.y)}
+            width={toPoint(zone.box.width)}
+            height={toPoint(zone.box.height)}
+            fill="#f9731699"
+            stroke="#ea580c"
+            strokeWidth={0.3}
+            strokeDasharray="1.5 1.5"
+            opacity={0.2}
+          />
+        ))}
+        {data.windows?.map((window) => (
+          <rect
+            key={window.id}
+            x={toPoint(window.box.x)}
+            y={toPoint(window.box.y)}
+            width={toPoint(window.box.width)}
+            height={toPoint(window.box.height)}
+            fill="#38bdf899"
+            stroke="#0ea5e9"
+            strokeWidth={0.4}
+            opacity={0.35}
+          />
+        ))}
+        {data.doors?.map((door) => (
+          <rect
+            key={door.id}
+            x={toPoint(door.box.x)}
+            y={toPoint(door.box.y)}
+            width={toPoint(door.box.width)}
+            height={toPoint(door.box.height)}
+            fill="none"
+            stroke="#6366f1"
+            strokeWidth={0.5}
+            strokeDasharray="1 1"
+          />
+        ))}
+        {data.furniture?.map((item) => (
+          <g key={item.id}>
+            <rect
+              x={toPoint(item.box.x)}
+              y={toPoint(item.box.y)}
+              width={toPoint(item.box.width)}
+              height={toPoint(item.box.height)}
+              fill="none"
+              stroke="#2563eb"
+              strokeWidth={0.6}
+              rx={0.8}
+            />
+            {item.label && (
+              <text
+                x={toPoint(item.box.x + item.box.width / 2)}
+                y={toPoint(item.box.y) - 0.5}
+                textAnchor="middle"
+                fill="#1d4ed8"
+                fontSize="2"
+                fontWeight="600"
+              >
+                {item.label}
+              </text>
+            )}
+          </g>
+        ))}
+        {data.walkways?.map((path) => (
+          <polyline
+            key={path.id}
+            points={pointsToString(path.points)}
+            fill="none"
+            stroke="#22c55e"
+            strokeWidth={0.7}
+            strokeDasharray="2 1"
+            opacity={0.85}
+          />
+        ))}
+        {data.obstructions?.map((obs) => (
+          <rect
+            key={obs.id}
+            x={toPoint(obs.box.x)}
+            y={toPoint(obs.box.y)}
+            width={toPoint(obs.box.width)}
+            height={toPoint(obs.box.height)}
+            fill="#ef444466"
+            stroke="#b91c1c"
+            strokeWidth={0.5}
+          />
+        ))}
+      </svg>
+      {(data.metadata?.notes?.length || data.depth_cues?.length) && (
+        <div className="absolute bottom-4 left-4 bg-white/90 px-3 py-2 rounded-lg text-xs text-slate-700 shadow">
+          {data.metadata?.notes && data.metadata.notes.length > 0 && (
+            <>
+              <p className="font-semibold mb-1">Spatial notes</p>
+              <ul className="list-disc list-inside space-y-0.5 mb-1">
+                {data.metadata.notes.map((note, idx) => (
+                  <li key={`note-${idx}`}>{note}</li>
+                ))}
+              </ul>
+            </>
+          )}
+          {data.depth_cues && data.depth_cues.length > 0 && (
+            <>
+              <p className="font-semibold mt-1 mb-1">Depth cues</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                {data.depth_cues.map((cue, idx) => (
+                  <li key={`cue-${idx}`}>{cue}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
