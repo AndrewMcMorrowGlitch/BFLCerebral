@@ -78,13 +78,13 @@ async function getKeywordsFromClaude(
         role: 'user',
         content: [
           {
-            type: 'text',
+            type: 'text' as const,
             text:
               'Provide a concise, high-intent Amazon search query (3-6 words) that describes the highlighted product. ' +
               'Focus on furniture/decor keywords like color, material, and style. Return only the keyword string.',
           },
           {
-            type: 'image',
+            type: 'image' as const,
             source: {
               type: 'base64',
               media_type: 'image/png',
@@ -94,7 +94,7 @@ async function getKeywordsFromClaude(
           ...(userPrompt
             ? [
                 {
-                  type: 'text',
+                  type: 'text' as const,
                   text: `User request/context: ${userPrompt}`,
                 },
               ]
