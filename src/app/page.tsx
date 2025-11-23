@@ -1,12 +1,21 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, ArrowRight, Share2, Maximize2 } from "lucide-react";
+import { Sparkles, ArrowRight, Share2, Maximize2, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ImageUploader from "@/components/ui/ImageUploader";
 import MessageBubble from "@/components/ui/MessageBubble";
+import ProductCard from "@/components/ui/ProductCard";
 import { cn } from "@/lib/utils";
+
+interface Product {
+  name: string;
+  category: string;
+  quantity?: number;
+  description: string;
+  searchTerms: string[];
+}
 
 interface Message {
   id: string;
@@ -19,6 +28,8 @@ interface Message {
 interface Project {
   id: string;
   current_image_url: string;
+  original_image_url?: string;
+  products?: Product[];
 }
 
 export default function Home() {
@@ -41,6 +52,8 @@ export default function Home() {
     const newProject: Project = {
       id: Date.now().toString(),
       current_image_url: url,
+      original_image_url: url,
+      products: [],
     };
     setActiveProject(newProject);
     setMessages([
@@ -99,6 +112,11 @@ export default function Home() {
           type: 'image',
         };
         setMessages(prev => [...prev, aiMessageObj]);
+
+        // Analyze products in the background
+        if (activeProject.original_image_url) {
+          analyzeProducts(activeProject.original_image_url, data.imageUrl);
+        }
       } else {
         throw new Error(data.warning || 'No image returned');
       }
@@ -114,6 +132,32 @@ export default function Home() {
       setMessages(prev => [...prev, errorMsg]);
     } finally {
       setIsAiThinking(false);
+    }
+  };
+
+  const analyzeProducts = async (originalUrl: string, decoratedUrl: string) => {
+    try {
+      const response = await fetch('/api/decoration/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          originalImage: originalUrl,
+          decoratedImage: decoratedUrl,
+          provider: 'gemini',
+        }),
+      });
+
+      if (!response.ok) {
+        console.error('Product analysis failed');
+        return;
+      }
+
+      const data = await response.json();
+      if (data.products && data.products.products) {
+        setActiveProject(prev => prev ? ({ ...prev, products: data.products.products }) : null);
+      }
+    } catch (error) {
+      console.error('Error analyzing products:', error);
     }
   };
 
@@ -230,6 +274,24 @@ export default function Home() {
           )}
           <div ref={messagesEndRef} />
         </div>
+
+        {/* Products Section */}
+        {activeProject.products && activeProject.products.length > 0 && (
+          <div className="border-t border-stone-100 bg-stone-50 p-4 lg:p-6 max-h-[300px] overflow-y-auto">
+            <div className="flex items-center gap-2 mb-4">
+              <Package className="w-5 h-5 text-stone-700" />
+              <h3 className="font-semibold text-stone-900">Suggested Products</h3>
+              <span className="text-xs text-stone-500 bg-stone-200 px-2 py-1 rounded-full">
+                {activeProject.products.length} items
+              </span>
+            </div>
+            <div className="space-y-3">
+              {activeProject.products.map((product, idx) => (
+                <ProductCard key={idx} product={product} />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Input Area */}
         <div className="p-4 lg:p-6 bg-white border-t border-stone-100">
