@@ -1,14 +1,25 @@
 import { NextResponse } from 'next/server';
+import { fal } from '@fal-ai/client';
 
-const FAL_ENDPOINT = 'https://queue.fal.run/fal-ai/flux/dev/image-to-image';
+const FAL_ENDPOINT = 'fal-ai/beta-image-232/edit';
+const CUSTOM_IMAGE_SIZE = { width: 1920, height: 1080 };
 
-type FalQueuedResponse = {
-  request_id?: string;
-  images?: { url?: string }[];
-  image?: { url?: string };
-  status?: string;
-  warning?: string;
-};
+const ensureFalConfigured = (() => {
+  let configured = false;
+  return () => {
+    if (configured) {
+      return;
+    }
+    const falKey = process.env.FAL_KEY;
+    if (!falKey) {
+      throw new Error('FAL_KEY is not configured');
+    }
+    fal.config({
+      credentials: falKey,
+    });
+    configured = true;
+  };
+})();
 
 export async function POST(request: Request) {
   try {
@@ -46,88 +57,39 @@ export async function POST(request: Request) {
       });
     }
 
-    // 2. Call FAL API (FLUX Image-to-Image)
-    const response = await fetch(FAL_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        Authorization: `Key ${process.env.FAL_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        prompt: prompt,
-        image_url: imageUrl,
-        strength: 0.85, // High strength for redesign
-        guidance_scale: 7.5,
-        num_inference_steps: 40,
-        enable_safety_checker: false
-      }),
-    });
+    ensureFalConfigured();
 
-    // 3. Robust Response Parsing
-    const responseText = await response.text();
-
-    if (!response.ok) {
-      console.error(`FAL API Error (${response.status}):`, responseText);
-      return NextResponse.json({ imageUrl: imageUrl, warning: 'FAL call failed.' });
-    }
-
-    let result: FalQueuedResponse;
     try {
-      result = JSON.parse(responseText) as FalQueuedResponse;
-    } catch (parseError) {
-      console.error('JSON Parse Error on FAL Response:', parseError);
-      return NextResponse.json({ imageUrl: imageUrl, warning: 'Invalid JSON from FAL.' });
-    }
+      const result = await fal.subscribe(FAL_ENDPOINT, {
+        input: {
+          prompt,
+          image_urls: [imageUrl],
+          guidance_scale: 6,
+          num_inference_steps: 40,
+          num_images: 1,
+          image_size: CUSTOM_IMAGE_SIZE,
+          enable_prompt_expansion: false,
+          enable_safety_checker: false,
+          output_format: 'png',
+        },
+      });
 
-    // Handle queued responses with polling
-    if (result.request_id) {
-      const requestId = result.request_id;
-      if (!requestId) {
-        return NextResponse.json({ imageUrl: imageUrl, warning: 'Missing request id from FLUX.' });
+      const output = (result as any)?.data ?? result;
+      const generatedUrl =
+        (Array.isArray(output?.images) && output.images[0]?.url) ||
+        output?.image?.url;
+
+      if (generatedUrl) {
+        return NextResponse.json({ imageUrl: generatedUrl });
       }
-      for (let i = 0; i < 60; i++) { // Increased timeout for higher quality
-        await new Promise((res) => setTimeout(res, 1000));
 
-        try {
-          const statusRes = await fetch(`https://queue.fal.run/fal-ai/flux/dev/requests/${requestId}`, {
-            headers: { Authorization: `Key ${process.env.FAL_KEY}` },
-          });
-
-          if (!statusRes.ok) {
-            continue;
-          }
-
-          const statusText = await statusRes.text();
-          let statusJson: FalQueuedResponse;
-
-          try {
-            statusJson = JSON.parse(statusText) as FalQueuedResponse;
-          } catch {
-            continue;
-          }
-
-          if (statusJson.status === 'COMPLETED') {
-            const output = statusJson.images?.[0]?.url || statusJson.image?.url;
-            if (output) return NextResponse.json({ imageUrl: output });
-          }
-
-          if (statusJson.status === 'FAILED') {
-            console.error('FAL Request Failed:', statusJson);
-            return NextResponse.json({ imageUrl: imageUrl, warning: 'Generation failed on server.' });
-          }
-        } catch (pollError) {
-          console.error('Polling network error:', pollError);
-          continue;
-        }
-      }
-      return NextResponse.json({ imageUrl: imageUrl, warning: 'Timed out waiting for FLUX.' });
+      console.warn('FAL result missing images; returning original image.');
+      return NextResponse.json({ imageUrl, warning: 'FAL result did not include an image.' });
+    } catch (falError) {
+      console.error('FAL request failed:', falError);
+      return NextResponse.json({ imageUrl, warning: 'Generation failed on server.' });
     }
 
-    if (result.images && result.images.length > 0) {
-      return NextResponse.json({ imageUrl: result.images[0].url });
-    }
-
-    return NextResponse.json({ imageUrl: imageUrl, warning: 'No image from FLUX.' });
   } catch (error) {
     console.error('Error in /api/render:', error);
     return NextResponse.json({ imageUrl: null, error: 'Internal Server Error' }, { status: 500 });
