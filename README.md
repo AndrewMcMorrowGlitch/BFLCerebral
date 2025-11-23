@@ -2,7 +2,7 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-First, run the development server:
+First, copy `example.env` to `.env` and fill the required keys (`FAL_KEY`, `ANTHROPIC_API_KEY`, `SERPAPI_KEY`, etc.). Then run the development server:
 
 ```bash
 npm run dev

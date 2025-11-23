@@ -24,13 +24,27 @@ const ensureFalConfigured = (() => {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { imageUrl, prompt } = body;
+    const {
+      imageUrl,
+      prompt,
+      referenceImageUrls: rawReferenceImages = [],
+    } = body ?? {};
 
     if (!imageUrl || !prompt) {
       return NextResponse.json(
         { error: 'imageUrl and prompt are required' },
         { status: 400 }
       );
+    }
+
+    const referenceImageUrls: string[] = Array.isArray(rawReferenceImages)
+      ? rawReferenceImages.filter(
+          (url: unknown): url is string =>
+            typeof url === 'string' && url.trim().length > 0,
+        )
+      : [];
+    if (referenceImageUrls.length > 0) {
+      console.log('[render] referenceImageUrls', referenceImageUrls);
     }
 
     if (!process.env.FAL_KEY) {
@@ -47,7 +61,9 @@ export async function POST(request: Request) {
       const result = await fal.subscribe(FAL_ENDPOINT, {
         input: {
           prompt,
-          image_urls: [imageUrl],
+          image_urls: Array.from(
+            new Set([imageUrl, ...referenceImageUrls]),
+          ),
           guidance_scale: 6,
           num_inference_steps: 40,
           num_images: 1,

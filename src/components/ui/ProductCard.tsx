@@ -8,6 +8,8 @@ interface Product {
   quantity?: number;
   description: string;
   searchTerms: string[];
+  linkUrl?: string;
+  imageUrl?: string;
 }
 
 interface ProductCardProps {
@@ -23,19 +25,29 @@ const categoryColors: Record<string, { bg: string; text: string; icon: string }>
 };
 
 export default function ProductCard({ product }: ProductCardProps) {
-  const amazonSearchUrl = `https://www.amazon.com/s?k=${encodeURIComponent(product.searchTerms[0] || product.name)}`;
+  const fallbackSearch = `https://www.amazon.com/s?k=${encodeURIComponent(product.searchTerms[0] || product.name)}`;
+  const targetUrl = product.linkUrl || fallbackSearch;
   const colors = categoryColors[product.category.toLowerCase()] || categoryColors.default;
 
   return (
     <div className="group relative bg-white rounded-xl p-4 border border-stone-200/60 hover:border-stone-300 hover:shadow-lg hover:shadow-stone-200/50 transition-all duration-300 overflow-hidden">
-      {/* Subtle gradient overlay */}
       <div className={`absolute inset-0 bg-gradient-to-br ${colors.bg} opacity-0 group-hover:opacity-30 transition-opacity duration-300`} />
 
       <div className="relative flex items-start gap-4">
-        {/* Icon Badge */}
-        <div className={`shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br ${colors.bg} border border-stone-200/50 flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform duration-300`}>
-          <Tag className={`w-5 h-5 ${colors.text}`} />
-        </div>
+        {product.imageUrl ? (
+          <div className="shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-stone-200 bg-stone-50 shadow-sm group-hover:scale-105 transition-transform duration-300">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={product.imageUrl}
+              alt={product.name}
+              className="w-full h-full object-cover"
+            />
+          </div>
+        ) : (
+          <div className={`shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br ${colors.bg} border border-stone-200/50 flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform duration-300`}>
+            <Tag className={`w-5 h-5 ${colors.text}`} />
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 min-w-0">
@@ -63,7 +75,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             <Button
               size="sm"
               className="h-8 px-3 text-xs gap-1.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-sm hover:shadow-md transition-all duration-200 group/btn"
-              onClick={() => window.open(amazonSearchUrl, '_blank')}
+              onClick={() => window.open(targetUrl, '_blank')}
             >
               <ShoppingCart className="w-3.5 h-3.5" />
               <span>Shop</span>

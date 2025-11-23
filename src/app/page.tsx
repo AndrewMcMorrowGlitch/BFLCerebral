@@ -15,6 +15,8 @@ interface Product {
   quantity?: number;
   description: string;
   searchTerms: string[];
+  linkUrl?: string;
+  imageUrl?: string;
 }
 
 interface Message {
@@ -85,6 +87,8 @@ export default function Home() {
     setIsAiThinking(true);
 
     try {
+      const referenceImageUrls: string[] = [];
+
       // Call API to generate new image
       const response = await fetch('/api/render', {
         method: 'POST',
@@ -92,6 +96,7 @@ export default function Home() {
         body: JSON.stringify({
           imageUrl: activeProject.current_image_url,
           prompt: "photorealistic, interior design, " + userMsg, // Basic prompt engineering
+          referenceImageUrls,
         }),
       });
 
@@ -101,7 +106,13 @@ export default function Home() {
 
       if (data.imageUrl) {
         // Update project image
-        setActiveProject(prev => prev ? ({ ...prev, current_image_url: data.imageUrl }) : null);
+        setActiveProject(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            current_image_url: data.imageUrl,
+          };
+        });
 
         // Add assistant response
         const aiMessageObj: Message = {
@@ -113,45 +124,34 @@ export default function Home() {
         };
         setMessages(prev => [...prev, aiMessageObj]);
 
-        // Add mock products for UI demonstration
-        setActiveProject(prev => prev ? ({
-          ...prev,
-          products: [
-            {
-              name: "Modern Velvet Sofa",
-              category: "Furniture",
-              quantity: 1,
-              description: "Contemporary blue velvet 3-seater sofa with gold legs",
-              searchTerms: ["blue velvet sofa", "modern couch", "velvet 3 seater"]
-            },
-            {
-              name: "Abstract Canvas Wall Art",
-              category: "Decor",
-              quantity: 2,
-              description: "Large abstract paintings for living room wall",
-              searchTerms: ["abstract wall art", "large canvas painting", "modern wall decor"]
-            },
-            {
-              name: "Gold Floor Lamp",
-              category: "Lighting",
-              quantity: 1,
-              description: "Modern arc floor lamp with marble base",
-              searchTerms: ["gold arc floor lamp", "modern standing lamp", "marble floor lamp"]
-            },
-            {
-              name: "Decorative Throw Pillows",
-              category: "Accessories",
-              quantity: 4,
-              description: "Textured cushions in complementary colors",
-              searchTerms: ["throw pillows set", "decorative cushions", "velvet pillows"]
+        try {
+          const productResponse = await fetch('/api/products/lens', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageUrl: data.imageUrl, prompt: userMsg }),
+          });
+          if (productResponse.ok) {
+            const { product } = await productResponse.json();
+            if (product) {
+              setActiveProject(prev => {
+                if (!prev) return prev;
+                const existing = prev.products ?? [];
+                const alreadyExists = existing.some(
+                  (item) => item.linkUrl && product.linkUrl && item.linkUrl === product.linkUrl,
+                );
+                const updatedProducts = alreadyExists ? existing : [...existing, product];
+                return {
+                  ...prev,
+                  products: updatedProducts,
+                };
+              });
             }
-          ]
-        }) : null);
-
-        // Analyze products in the background (disabled - add GOOGLE_API_KEY to enable)
-        // if (activeProject.original_image_url) {
-        //   analyzeProducts(activeProject.original_image_url, data.imageUrl);
-        // }
+          } else {
+            console.warn('Lens product lookup failed', await productResponse.text());
+          }
+        } catch (lensError) {
+          console.warn('Error running lens search', lensError);
+        }
       } else {
         throw new Error(data.warning || 'No image returned');
       }

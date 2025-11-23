@@ -8,6 +8,8 @@ export interface Product {
   quantity?: number;
   description: string;
   searchTerms: string[];
+  linkUrl?: string;
+  imageUrl?: string;
 }
 
 export interface ProductAnalysisResult {
