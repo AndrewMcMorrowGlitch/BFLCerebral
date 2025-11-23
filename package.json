@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.70.1",
-    "cheerio": "^1.0.0-rc.12",
     "@fal-ai/client": "^1.7.2",
     "@google/generative-ai": "^0.24.1",
     "@radix-ui/react-slot": "^1.2.4",
@@ -27,6 +26,7 @@
     "next": "16.0.3",
     "react": "19.2.0",
     "react-dom": "19.2.0",
+    "sharp": "^0.34.5",
     "tailwind-merge": "^3.4.0",
     "three": "^0.181.2",
     "uuid": "^13.0.0"

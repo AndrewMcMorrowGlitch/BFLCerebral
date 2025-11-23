@@ -22,6 +22,8 @@ export interface Product {
   searchTerms: string[];
   linkUrl?: string;
   imageUrl?: string;
+  price?: string;
+  asin?: string;
 }
 
 export interface ProductAnalysisResponse {

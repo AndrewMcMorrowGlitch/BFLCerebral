@@ -17,6 +17,8 @@ interface Product {
   searchTerms: string[];
   linkUrl?: string;
   imageUrl?: string;
+  price?: string;
+  asin?: string;
 }
 
 interface Message {
@@ -125,32 +127,45 @@ export default function Home() {
         setMessages(prev => [...prev, aiMessageObj]);
 
         try {
-          const productResponse = await fetch('/api/products/lens', {
+          const productResponse = await fetch('/api/products/smart', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imageUrl: data.imageUrl, prompt: userMsg }),
+            body: JSON.stringify({
+              imageUrl: data.imageUrl,
+              userPrompt: userMsg,
+            }),
           });
           if (productResponse.ok) {
-            const { product } = await productResponse.json();
-            if (product) {
+            const { products } = await productResponse.json();
+            if (Array.isArray(products) && products.length > 0) {
               setActiveProject(prev => {
                 if (!prev) return prev;
                 const existing = prev.products ?? [];
-                const alreadyExists = existing.some(
-                  (item) => item.linkUrl && product.linkUrl && item.linkUrl === product.linkUrl,
-                );
-                const updatedProducts = alreadyExists ? existing : [...existing, product];
+                const merged = [...existing];
+
+                products.forEach((product: Product) => {
+                  const alreadyExists = merged.some(
+                    (item) =>
+                      item.linkUrl &&
+                      product.linkUrl &&
+                      item.linkUrl === product.linkUrl,
+                  );
+                  if (!alreadyExists) {
+                    merged.push(product);
+                  }
+                });
+
                 return {
                   ...prev,
-                  products: updatedProducts,
+                  products: merged,
                 };
               });
             }
           } else {
-            console.warn('Lens product lookup failed', await productResponse.text());
+            console.warn('Smart product lookup failed', await productResponse.text());
           }
-        } catch (lensError) {
-          console.warn('Error running lens search', lensError);
+        } catch (smartError) {
+          console.warn('Error running smart product search', smartError);
         }
       } else {
         throw new Error(data.warning || 'No image returned');

@@ -10,6 +10,8 @@ interface Product {
   searchTerms: string[];
   linkUrl?: string;
   imageUrl?: string;
+  price?: string;
+  asin?: string;
 }
 
 interface ProductCardProps {
@@ -68,9 +70,16 @@ export default function ProductCard({ product }: ProductCardProps) {
           </p>
 
           <div className="flex items-center justify-between gap-3">
-            <span className={`text-xs font-medium ${colors.text} capitalize bg-gradient-to-r ${colors.bg} px-3 py-1 rounded-lg border border-stone-200/40`}>
-              {product.category}
-            </span>
+            <div className="flex flex-col gap-1">
+              <span className={`text-xs font-medium ${colors.text} capitalize bg-gradient-to-r ${colors.bg} px-3 py-1 rounded-lg border border-stone-200/40`}>
+                {product.category}
+              </span>
+              {product.price && (
+                <span className="text-xs font-semibold text-stone-800">
+                  {product.price}
+                </span>
+              )}
+            </div>
 
             <Button
               size="sm"
