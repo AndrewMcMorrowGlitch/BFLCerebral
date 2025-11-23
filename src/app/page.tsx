@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, ArrowRight, Share2, Maximize2, Package } from "lucide-react";
+import { Sparkles, ArrowRight, Share2, Maximize2, Package, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ImageUploader from "@/components/ui/ImageUploader";
@@ -21,6 +21,13 @@ interface Product {
   asin?: string;
 }
 
+interface ProductGroup {
+  id: string;
+  timestamp: number;
+  prompt: string;
+  products: Product[];
+}
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -33,7 +40,7 @@ interface Project {
   id: string;
   current_image_url: string;
   original_image_url?: string;
-  products?: Product[];
+  productGroups?: ProductGroup[];
 }
 
 type SpatialBox = {
@@ -124,6 +131,8 @@ export default function Home() {
   const [designSuggestionsError, setDesignSuggestionsError] = useState<string | null>(null);
   const [highlightedRegion, setHighlightedRegion] = useState<string | null>(null);
   const [suggestionsCollapsed, setSuggestionsCollapsed] = useState(false);
+  const [shoppingListCollapsed, setShoppingListCollapsed] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Scroll to bottom of chat
@@ -149,7 +158,7 @@ export default function Home() {
       id: Date.now().toString(),
       current_image_url: url,
       original_image_url: url,
-      products: [],
+      productGroups: [],
     };
     setActiveProject(newProject);
     setMessages([
@@ -324,24 +333,18 @@ export default function Home() {
             if (Array.isArray(products) && products.length > 0) {
               setActiveProject(prev => {
                 if (!prev) return prev;
-                const existing = prev.products ?? [];
-                const merged = [...existing];
+                const existingGroups = prev.productGroups ?? [];
 
-                products.forEach((product: Product) => {
-                  const alreadyExists = merged.some(
-                    (item) =>
-                      item.linkUrl &&
-                      product.linkUrl &&
-                      item.linkUrl === product.linkUrl,
-                  );
-                  if (!alreadyExists) {
-                    merged.push(product);
-                  }
-                });
+                const newGroup: ProductGroup = {
+                  id: Date.now().toString(),
+                  timestamp: Date.now(),
+                  prompt: userMsg,
+                  products: products,
+                };
 
                 return {
                   ...prev,
-                  products: merged,
+                  productGroups: [...existingGroups, newGroup],
                 };
               });
             }
@@ -409,58 +412,58 @@ export default function Home() {
   // Empty State / Upload
   if (!activeProject) {
     return (
-      <div className="relative min-h-[calc(100vh-64px)] flex flex-col items-center justify-center px-4 py-12 overflow-hidden bg-gradient-to-br from-slate-50 via-white to-indigo-50/20">
+      <div className="relative min-h-[calc(100vh-64px)] flex flex-col items-center justify-center px-4 py-12 overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50/30 to-white">
         {/* Sophisticated Background Effects */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px] -z-10" />
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-50/40 via-transparent to-purple-50/40 -z-10" />
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-200/20 rounded-full mix-blend-multiply filter blur-3xl animate-blob -z-10" />
-        <div className="absolute top-0 right-1/4 w-96 h-96 bg-purple-200/20 rounded-full mix-blend-multiply filter blur-3xl animate-blob animation-delay-2000 -z-10" />
-        <div className="absolute bottom-0 left-1/3 w-96 h-96 bg-pink-200/20 rounded-full mix-blend-multiply filter blur-3xl animate-blob animation-delay-4000 -z-10" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#3b82f608_1px,transparent_1px),linear-gradient(to_bottom,#3b82f608_1px,transparent_1px)] bg-[size:80px_80px] -z-10" />
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-50/60 via-transparent to-indigo-50/40 -z-10" />
+        <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-blue-400/10 rounded-full mix-blend-multiply filter blur-[100px] animate-blob -z-10" />
+        <div className="absolute top-0 right-1/4 w-[600px] h-[600px] bg-indigo-400/10 rounded-full mix-blend-multiply filter blur-[100px] animate-blob animation-delay-2000 -z-10" />
+        <div className="absolute bottom-0 left-1/3 w-[600px] h-[600px] bg-violet-400/10 rounded-full mix-blend-multiply filter blur-[100px] animate-blob animation-delay-4000 -z-10" />
 
         <div className="container mx-auto max-w-7xl relative z-10">
           {/* Hero Section */}
           <div className="text-center mb-16 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* Badge */}
-            <div className="inline-flex items-center gap-2.5 bg-gradient-to-r from-blue-600/10 via-purple-600/10 to-pink-600/10 backdrop-blur-xl px-5 py-2.5 rounded-full border border-blue-200/50 shadow-lg shadow-blue-100/50 hover:shadow-xl hover:shadow-blue-100/60 transition-all duration-300">
+            <div className="inline-flex items-center gap-2.5 bg-white/80 backdrop-blur-xl px-5 py-2.5 rounded-full border border-blue-200/60 shadow-lg shadow-blue-500/5 hover:shadow-xl hover:shadow-blue-500/10 hover:border-blue-300/80 transition-all duration-300">
               <div className="relative">
                 <Sparkles className="w-4 h-4 text-blue-600" />
-                <Sparkles className="w-4 h-4 text-blue-600 absolute inset-0 animate-ping opacity-40" />
+                <Sparkles className="w-4 h-4 text-blue-400 absolute inset-0 animate-ping opacity-30" />
               </div>
-              <span className="text-sm font-semibold bg-gradient-to-r from-blue-700 to-purple-700 bg-clip-text text-transparent">
+              <span className="text-sm font-semibold text-slate-700">
                 Powered by Advanced AI
               </span>
             </div>
 
             {/* Main Headline */}
             <div className="space-y-6">
-              <h1 className="text-6xl md:text-8xl font-black tracking-tight leading-none">
-                <span className="block bg-gradient-to-br from-slate-900 via-slate-800 to-slate-600 bg-clip-text text-transparent drop-shadow-sm">
+              <h1 className="text-6xl md:text-7xl lg:text-8xl font-extrabold tracking-[-0.02em] leading-[0.95]">
+                <span className="block text-slate-900">
                   Transform Your
                 </span>
-                <span className="block mt-2 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent animate-gradient">
+                <span className="block mt-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 bg-clip-text text-transparent">
                   Living Space
                 </span>
               </h1>
-              <p className="text-xl md:text-2xl text-slate-600 max-w-3xl mx-auto leading-relaxed font-medium">
-                Upload any room photo and watch our AI redesign it instantly with new styles,
-                furniture, and decor. Get shoppable product recommendations.
+              <p className="text-lg md:text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
+                Upload any room photo and watch AI redesign it instantly with new styles,
+                furniture, and decor—complete with shoppable recommendations.
               </p>
             </div>
 
             {/* CTA Stats */}
-            <div className="flex items-center justify-center gap-8 text-sm text-slate-600 font-medium">
+            <div className="flex items-center justify-center gap-6 text-sm text-slate-600 font-medium">
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-lg shadow-emerald-500/50" />
                 <span>AI Ready</span>
               </div>
-              <div className="w-px h-4 bg-slate-300" />
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-900">Instant</span>
+              <div className="w-px h-4 bg-slate-200" />
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold text-slate-900">Instant</span>
                 <span>Results</span>
               </div>
-              <div className="w-px h-4 bg-slate-300" />
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-900">Free</span>
+              <div className="w-px h-4 bg-slate-200" />
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold text-slate-900">Free</span>
                 <span>to Try</span>
               </div>
             </div>
@@ -473,11 +476,11 @@ export default function Home() {
 
           {/* Feature Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300">
-            <div className="group relative bg-white/80 backdrop-blur-xl p-8 rounded-3xl border border-slate-200/60 shadow-lg shadow-slate-200/50 hover:shadow-2xl hover:shadow-blue-200/30 hover:border-blue-200 transition-all duration-500 hover:-translate-y-1">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="group relative bg-white/90 backdrop-blur-xl p-8 rounded-2xl border border-slate-200/70 shadow-sm hover:shadow-lg hover:shadow-blue-500/10 hover:border-blue-300/50 transition-all duration-300 hover:-translate-y-0.5">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-50/40 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               <div className="relative space-y-4">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-200/50 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500">
-                  <Sparkles className="w-7 h-7 text-white" />
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md shadow-blue-500/20 group-hover:scale-105 transition-all duration-300">
+                  <Sparkles className="w-6 h-6 text-white" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-slate-900 mb-2">AI Generation</h3>
@@ -488,26 +491,26 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="group relative bg-white/80 backdrop-blur-xl p-8 rounded-3xl border border-slate-200/60 shadow-lg shadow-slate-200/50 hover:shadow-2xl hover:shadow-purple-200/30 hover:border-purple-200 transition-all duration-500 hover:-translate-y-1">
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-50/50 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="group relative bg-white/90 backdrop-blur-xl p-8 rounded-2xl border border-slate-200/70 shadow-sm hover:shadow-lg hover:shadow-indigo-500/10 hover:border-indigo-300/50 transition-all duration-300 hover:-translate-y-0.5">
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/40 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               <div className="relative space-y-4">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-200/50 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500">
-                  <Package className="w-7 h-7 text-white" />
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-all duration-300">
+                  <Package className="w-6 h-6 text-white" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-slate-900 mb-2">Smart Shopping</h3>
                   <p className="text-sm text-slate-600 leading-relaxed">
-                    Get instant product recommendations with direct Amazon links for easy purchasing
+                    Get instant product recommendations with direct links for easy purchasing
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="group relative bg-white/80 backdrop-blur-xl p-8 rounded-3xl border border-slate-200/60 shadow-lg shadow-slate-200/50 hover:shadow-2xl hover:shadow-pink-200/30 hover:border-pink-200 transition-all duration-500 hover:-translate-y-1">
-              <div className="absolute inset-0 bg-gradient-to-br from-pink-50/50 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="group relative bg-white/90 backdrop-blur-xl p-8 rounded-2xl border border-slate-200/70 shadow-sm hover:shadow-lg hover:shadow-violet-500/10 hover:border-violet-300/50 transition-all duration-300 hover:-translate-y-0.5">
+              <div className="absolute inset-0 bg-gradient-to-br from-violet-50/40 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               <div className="relative space-y-4">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-pink-500 to-pink-600 flex items-center justify-center shadow-lg shadow-pink-200/50 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500">
-                  <ArrowRight className="w-7 h-7 text-white" />
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center shadow-md shadow-violet-500/20 group-hover:scale-105 transition-all duration-300">
+                  <ArrowRight className="w-6 h-6 text-white" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-slate-900 mb-2">Instant Results</h3>
@@ -525,18 +528,18 @@ export default function Home() {
 
   // Workspace State
   return (
-    <div className="min-h-[calc(100vh-64px)] flex flex-col lg:flex-row overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-white">
+    <div className="h-[calc(100vh-64px)] flex flex-col lg:flex-row overflow-hidden bg-gradient-to-br from-slate-50 via-white to-blue-50/20">
 
       {/* LEFT: Canvas / Image Preview */}
-      <div className="w-full lg:w-[58%] h-[45vh] lg:h-full relative bg-gradient-to-br from-slate-100 via-white to-blue-50/30 flex flex-col gap-6 p-8 lg:p-16 border-b lg:border-b-0 lg:border-r border-slate-200/50">
-        <div className="relative w-full h-full max-h-[85vh] flex-1 flex items-center justify-center">
+      <div className="w-full lg:w-[58%] h-[45vh] lg:h-[calc(100vh-64px)] relative bg-gradient-to-br from-white via-slate-50/30 to-blue-50/20 flex flex-col gap-6 p-6 lg:p-8 border-b lg:border-b-0 lg:border-r border-slate-200/60 overflow-y-auto">
+        <div className="relative w-full flex-1 flex items-center justify-center min-h-0">
           {/* Decorative Elements */}
-          <div className="absolute top-10 left-10 w-32 h-32 bg-blue-200/20 rounded-full mix-blend-multiply filter blur-2xl" />
-          <div className="absolute bottom-10 right-10 w-32 h-32 bg-purple-200/20 rounded-full mix-blend-multiply filter blur-2xl" />
+          <div className="absolute top-10 left-10 w-32 h-32 bg-blue-200/20 rounded-full mix-blend-multiply filter blur-2xl pointer-events-none" />
+          <div className="absolute bottom-10 right-10 w-32 h-32 bg-purple-200/20 rounded-full mix-blend-multiply filter blur-2xl pointer-events-none" />
 
           {/* Image Container */}
-          <div className="relative w-full h-full rounded-[2rem] overflow-hidden bg-white shadow-2xl shadow-slate-900/10 ring-1 ring-slate-900/5 transition-all duration-500 hover:shadow-3xl hover:shadow-slate-900/20">
-            <div className="absolute top-5 right-5 z-20 flex items-center gap-3 bg-white/90 backdrop-blur-xl px-4 py-2 rounded-2xl border border-slate-200/70 shadow-lg">
+          <div className="relative w-full h-full max-h-[calc(100vh-200px)] rounded-2xl overflow-hidden bg-white shadow-xl shadow-slate-200/60 ring-1 ring-slate-200/60 transition-all duration-300">
+            <div className="absolute top-4 right-4 z-20 flex items-center gap-3 bg-white/95 backdrop-blur-xl px-4 py-2.5 rounded-xl border border-slate-200/70 shadow-md">
               <span className="text-xs font-semibold text-slate-700">Proportion Mode</span>
               <button
                 onClick={handleSpatialToggle}
@@ -620,35 +623,35 @@ export default function Home() {
         </div>
 
         {showDesignPanel && (
-          <div className="w-full rounded-[1.75rem] bg-white/80 backdrop-blur-xl border border-slate-200/70 shadow-xl shadow-slate-200/60">
-            <div className="p-6 lg:p-7 border-b border-slate-200/60 flex items-center justify-between">
-              <div className="flex items-center gap-3.5">
-                <div className="p-3 rounded-2xl bg-gradient-to-br from-emerald-500 via-cyan-500 to-blue-500 shadow-lg shadow-emerald-200/50">
-                  <Sparkles className="w-5 h-5 text-white" />
+          <div className="w-full rounded-xl bg-white/95 backdrop-blur-xl border border-slate-200/70 shadow-lg mt-4">
+            <div className="px-5 py-3 border-b border-slate-200/60 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 shadow-md shadow-blue-500/20">
+                  <Sparkles className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">AI Design Improvements</h3>
-                  <p className="text-xs text-slate-600 font-medium">Spatial layout insights</p>
+                  <h3 className="text-xs font-bold text-slate-900">AI Design Insights</h3>
+                  <p className="text-[10px] text-slate-600">Spatial layout analysis</p>
                 </div>
               </div>
               <button
                 onClick={() => setSuggestionsCollapsed((prev) => !prev)}
-                className="text-xs font-semibold text-slate-600 hover:text-slate-900"
+                className="text-[10px] font-semibold text-slate-600 hover:text-slate-900 px-2.5 py-1 rounded-lg hover:bg-slate-100 transition-colors"
               >
                 {suggestionsCollapsed ? 'Expand' : 'Collapse'}
               </button>
             </div>
             {!suggestionsCollapsed && (
-              <div className="p-5 lg:p-6 max-h-[260px] overflow-y-auto space-y-4 custom-scrollbar">
+              <div className="px-4 py-3 max-h-[220px] overflow-y-auto space-y-3 custom-scrollbar">
                 {designSuggestionsLoading && (
-                  <p className="text-xs text-slate-500">Analyzing layout...</p>
+                  <p className="text-[11px] text-slate-500 italic">Analyzing layout...</p>
                 )}
                 {designSuggestionsError && (
-                  <p className="text-xs text-red-600 font-semibold">{designSuggestionsError}</p>
+                  <p className="text-[11px] text-red-600 font-semibold">{designSuggestionsError}</p>
                 )}
                 {currentDesignSuggestions?.layout_issues?.length ? (
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Layout issues</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Layout issues</p>
                     <div className="space-y-2">
                       {currentDesignSuggestions.layout_issues.map((issue) => (
                         <SuggestionCard
@@ -664,8 +667,8 @@ export default function Home() {
                 ) : null}
                 {currentDesignSuggestions?.improvement_suggestions?.length ? (
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Improvements</p>
-                    <div className="space-y-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Improvements</p>
+                    <div className="space-y-1.5">
                       {currentDesignSuggestions.improvement_suggestions.map((item) => (
                         <SuggestionCard
                           key={item.id}
@@ -680,8 +683,8 @@ export default function Home() {
                 ) : null}
                 {currentDesignSuggestions?.measurements?.length ? (
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Measurements</p>
-                    <div className="space-y-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Measurements</p>
+                    <div className="space-y-1.5">
                       {currentDesignSuggestions.measurements.map((measurement) => (
                         <SuggestionCard
                           key={measurement.id}
@@ -696,16 +699,16 @@ export default function Home() {
                 ) : null}
                 {currentDesignSuggestions?.product_suggestions?.length ? (
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Product ideas</p>
-                    <div className="space-y-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Product ideas</p>
+                    <div className="space-y-1.5">
                       {currentDesignSuggestions.product_suggestions.map((product) => (
                         <div
                           key={product.id}
-                          className="rounded-xl border border-slate-200/70 bg-white/90 px-4 py-2 text-xs text-slate-700 font-medium"
+                          className="rounded-lg border border-slate-200/70 bg-white/90 px-3 py-2 text-[11px] text-slate-700 font-medium"
                         >
                           <p>{product.query}</p>
                           {product.notes && (
-                            <p className="text-slate-500 text-[11px]">{product.notes}</p>
+                            <p className="text-slate-500 text-[10px] mt-0.5">{product.notes}</p>
                           )}
                         </div>
                       ))}
@@ -719,23 +722,23 @@ export default function Home() {
       </div>
 
       {/* RIGHT: Chat Interface */}
-      <div className="w-full lg:w-[42%] h-[55vh] lg:h-full flex flex-col bg-white/95 backdrop-blur-xl">
+      <div className="w-full lg:w-[42%] h-[55vh] lg:h-[calc(100vh-64px)] flex flex-col bg-white/95 backdrop-blur-xl">
 
         {/* Chat Header */}
-        <div className="border-b border-slate-200/60 bg-gradient-to-r from-white via-blue-50/30 to-purple-50/30 backdrop-blur-xl">
-          <div className="flex items-center justify-between px-8 py-5">
-            <div className="flex items-center gap-4">
+        <div className="shrink-0 border-b border-slate-200/60 bg-white/95 backdrop-blur-xl">
+          <div className="flex items-center justify-between px-5 py-4">
+            <div className="flex items-center gap-3">
               <div className="relative">
-                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 flex items-center justify-center shadow-lg shadow-blue-200/50">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-500/20">
                   <Sparkles className="w-5 h-5 text-white" />
                 </div>
-                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white shadow-sm">
-                  <span className="absolute inset-0 rounded-full bg-green-400 animate-ping opacity-75" />
+                <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white">
+                  <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-60" />
                 </div>
               </div>
               <div>
-                <h2 className="text-lg font-bold text-slate-900">AI Designer</h2>
-                <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
+                <h2 className="text-base font-bold text-slate-900">AI Designer</h2>
+                <div className="flex items-center gap-2 text-xs text-slate-600">
                   <span>Active & Ready</span>
                 </div>
               </div>
@@ -744,15 +747,15 @@ export default function Home() {
               variant="outline"
               size="sm"
               onClick={() => setActiveProject(null)}
-              className="text-slate-700 hover:text-slate-900 border-slate-300 hover:border-slate-400 hover:bg-slate-100 transition-all rounded-xl font-semibold shadow-sm"
+              className="text-slate-700 hover:text-slate-900 border-slate-300 hover:border-slate-400 hover:bg-slate-50 transition-all rounded-lg font-semibold"
             >
               New Project
             </Button>
           </div>
         </div>
 
-        {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-2 scroll-smooth">
+        {/* Messages Area - Scrollable */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 custom-scrollbar">
           {messages.map((msg) => (
             <MessageBubble
               key={msg.id}
@@ -764,13 +767,12 @@ export default function Home() {
           ))}
           {/* Typing Indicator */}
           {isAiThinking && (
-            <div className="flex w-full mb-6 justify-start animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="relative bg-gradient-to-br from-white via-blue-50/30 to-purple-50/30 border border-slate-200/60 rounded-[1.25rem] rounded-tl-sm p-6 shadow-xl shadow-slate-200/60 backdrop-blur-sm">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5 rounded-[1.25rem] rounded-tl-sm" />
-                <div className="relative flex gap-2 items-center">
-                  <span className="w-3 h-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full animate-bounce shadow-sm"></span>
-                  <span className="w-3 h-3 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full animate-bounce shadow-sm" style={{ animationDelay: '0.15s' }}></span>
-                  <span className="w-3 h-3 bg-gradient-to-br from-pink-500 to-pink-600 rounded-full animate-bounce shadow-sm" style={{ animationDelay: '0.3s' }}></span>
+            <div className="flex w-full justify-start animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="relative bg-white border border-slate-200/60 rounded-2xl rounded-tl-sm px-4 py-3 shadow-md">
+                <div className="flex gap-1.5 items-center">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></span>
+                  <span className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></span>
+                  <span className="w-2 h-2 bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></span>
                 </div>
               </div>
             </div>
@@ -779,89 +781,146 @@ export default function Home() {
         </div>
 
         {/* Products Section */}
-        {activeProject.products && activeProject.products.length > 0 && (
-          <div className="border-t border-slate-200/60 bg-gradient-to-b from-blue-50/30 via-purple-50/20 to-white backdrop-blur-sm">
-            <div className="p-6 lg:p-7 border-b border-slate-200/60 bg-white/90 backdrop-blur-xl">
+        {activeProject.productGroups && activeProject.productGroups.length > 0 && (
+          <div className="shrink-0 border-t border-slate-200/60 bg-white/95">
+            <div className="px-5 py-3 border-b border-slate-200/60">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3.5">
+                <div className="flex items-center gap-2.5">
                   <div className="relative">
-                    <div className="p-3 rounded-2xl bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 shadow-lg shadow-blue-200/50">
-                      <Package className="w-5 h-5 text-white" />
+                    <div className="p-2 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 shadow-md shadow-blue-500/20">
+                      <Package className="w-4 h-4 text-white" />
                     </div>
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white animate-pulse" />
+                    <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-500 rounded-full border-2 border-white animate-pulse" />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-slate-900">Shopping List</h3>
-                    <p className="text-xs text-slate-600 font-medium">Curated recommendations for your design</p>
+                    <h3 className="text-xs font-bold text-slate-900">Shopping List</h3>
+                    <p className="text-[10px] text-slate-600">{activeProject.productGroups.length} {activeProject.productGroups.length === 1 ? 'group' : 'groups'}</p>
                   </div>
                 </div>
-                <div className="text-xs font-bold text-slate-700 bg-gradient-to-br from-slate-100 to-white px-4 py-2 rounded-xl border border-slate-200/50 shadow-sm">
-                  {activeProject.products.length} {activeProject.products.length === 1 ? 'item' : 'items'}
-                </div>
+                <button
+                  onClick={() => setShoppingListCollapsed(!shoppingListCollapsed)}
+                  className="text-[10px] font-semibold text-slate-600 hover:text-slate-900 px-2.5 py-1 rounded-lg hover:bg-slate-100 transition-colors flex items-center gap-1"
+                >
+                  {shoppingListCollapsed ? (
+                    <>
+                      Expand <ChevronDown className="w-3 h-3" />
+                    </>
+                  ) : (
+                    <>
+                      Collapse <ChevronUp className="w-3 h-3" />
+                    </>
+                  )}
+                </button>
               </div>
             </div>
-            <div className="p-5 lg:p-6 max-h-[340px] overflow-y-auto space-y-3.5 custom-scrollbar">
-              {activeProject.products.map((product, idx) => (
-                <div
-                  key={idx}
-                  className="animate-in fade-in slide-in-from-bottom-4 duration-500"
-                  style={{ animationDelay: `${idx * 100}ms` }}
-                >
-                  <ProductCard product={product} />
-                </div>
-              ))}
-            </div>
+            {!shoppingListCollapsed && (
+              <div className="px-5 py-3 max-h-[240px] overflow-y-auto space-y-3 custom-scrollbar">
+                {activeProject.productGroups.map((group) => {
+                  const isExpanded = expandedGroups.has(group.id);
+                  const displayProducts = isExpanded ? group.products : group.products.slice(0, 1);
+                  const hasMore = group.products.length > 1;
+
+                  return (
+                    <div
+                      key={group.id}
+                      className="border border-slate-200/70 rounded-lg bg-slate-50/50 p-2.5"
+                    >
+                      <div className="text-[10px] text-slate-500 mb-2 font-medium">
+                        &ldquo;{group.prompt}&rdquo;
+                      </div>
+                      <div className="space-y-2">
+                        {displayProducts.map((product: Product, idx: number) => (
+                          <div
+                            key={idx}
+                            className="animate-in fade-in slide-in-from-bottom-4 duration-500"
+                            style={{ animationDelay: `${idx * 100}ms` }}
+                          >
+                            <ProductCard product={product} />
+                          </div>
+                        ))}
+                      </div>
+                      {hasMore && (
+                        <button
+                          onClick={() => {
+                            setExpandedGroups(prev => {
+                              const newSet = new Set(prev);
+                              if (newSet.has(group.id)) {
+                                newSet.delete(group.id);
+                              } else {
+                                newSet.add(group.id);
+                              }
+                              return newSet;
+                            });
+                          }}
+                          className="mt-2 w-full text-[10px] font-semibold text-blue-600 hover:text-blue-700 py-1.5 px-2 rounded-lg hover:bg-blue-50 transition-colors flex items-center justify-center gap-1"
+                        >
+                          {isExpanded ? (
+                            <>
+                              Show Less <ChevronUp className="w-3 h-3" />
+                            </>
+                          ) : (
+                            <>
+                              Show {group.products.length - 1} More <ChevronDown className="w-3 h-3" />
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
         {/* Input Area */}
-        <div className="p-6 lg:p-8 bg-gradient-to-t from-slate-50 via-white to-white border-t border-slate-200/60">
+        <div className="shrink-0 px-5 py-4 bg-white/98 border-t border-slate-200/60">
           <form
             onSubmit={handleSendMessage}
-            className="relative flex items-center gap-3 bg-white p-3 rounded-[1.25rem] border-2 border-slate-200 hover:border-slate-300 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100 transition-all shadow-lg shadow-slate-200/50 hover:shadow-xl"
+            className="relative flex items-center gap-2 bg-slate-50/80 p-2 rounded-xl border border-slate-200 hover:border-slate-300 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all"
           >
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="shrink-0 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all hover:scale-110"
+              className="shrink-0 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
             >
-              <Sparkles className="w-5 h-5" />
+              <Sparkles className="w-4 h-4" />
             </Button>
 
             <Input
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              placeholder="Describe your vision... e.g., make the walls sage green with gold accents"
-              className="flex-1 border-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-slate-400 h-12 text-sm font-medium"
+              placeholder="Describe your design vision..."
+              className="flex-1 border-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-slate-400 h-9 text-sm"
             />
 
             <Button
               type="submit"
               disabled={!inputText.trim() || isAiThinking}
               className={cn(
-                "shrink-0 rounded-xl transition-all duration-300 h-11 px-6 font-semibold shadow-lg",
+                "shrink-0 rounded-lg transition-all duration-200 h-8 px-4 font-semibold text-sm",
                 inputText.trim()
-                  ? "bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-blue-200/50 hover:shadow-xl hover:shadow-blue-300/50 hover:scale-105"
-                  : "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-sm hover:shadow-md"
+                  : "bg-slate-200 text-slate-400 cursor-not-allowed"
               )}
             >
               {isAiThinking ? (
-                <span className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" />
-                  <span className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                  <span className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                <span className="flex items-center gap-1.5">
+                  <span className="w-1 h-1 bg-white rounded-full animate-bounce" />
+                  <span className="w-1 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                  <span className="w-1 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                 </span>
               ) : (
-                <span className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5">
                   Send
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </span>
               )}
             </Button>
           </form>
-          <p className="text-center text-xs text-slate-500 mt-5 font-medium">
-            ✨ Powered by AI • Results may vary
+          <p className="text-center text-[10px] text-slate-500 mt-2.5">
+            Powered by AI • Results may vary
           </p>
         </div>
 
@@ -1069,15 +1128,15 @@ const ProportionOverlay = ({
       {(proportionInsights.length ||
         data.metadata?.notes?.length ||
         data.depth_cues?.length) && (
-        <div className="absolute bottom-4 left-4 bg-white/95 px-4 py-3 rounded-xl text-xs text-slate-700 shadow max-w-[65%] border border-slate-200/80">
+        <div className="absolute bottom-4 left-4 bg-white/98 backdrop-blur-xl px-3 py-2.5 rounded-lg text-[11px] text-slate-700 shadow-lg max-w-[60%] border border-slate-200/80">
           <div className="space-y-2">
             {proportionInsights.length > 0 && (
               <div>
-                <p className="font-semibold uppercase tracking-wide text-[10px] text-slate-500 mb-1">
+                <p className="font-bold uppercase tracking-wider text-[9px] text-slate-500 mb-1">
                   Proportion insights
                 </p>
-                <ul className="list-disc list-inside space-y-0.5">
-                  {proportionInsights.slice(0, 6).map((insight, idx) => (
+                <ul className="list-disc list-inside space-y-0.5 text-[10px] leading-snug">
+                  {proportionInsights.slice(0, 5).map((insight, idx) => (
                     <li key={`prop-${idx}`}>{insight}</li>
                   ))}
                 </ul>
@@ -1085,11 +1144,11 @@ const ProportionOverlay = ({
             )}
             {data.metadata?.notes && data.metadata.notes.length > 0 && (
               <div>
-                <p className="font-semibold uppercase tracking-wide text-[10px] text-slate-500 mb-1">
+                <p className="font-bold uppercase tracking-wider text-[9px] text-slate-500 mb-1">
                   Spatial notes
                 </p>
-                <ul className="list-disc list-inside space-y-0.5">
-                  {data.metadata.notes.map((note, idx) => (
+                <ul className="list-disc list-inside space-y-0.5 text-[10px] leading-snug">
+                  {data.metadata.notes.slice(0, 4).map((note, idx) => (
                     <li key={`note-${idx}`}>{note}</li>
                   ))}
                 </ul>
@@ -1097,11 +1156,11 @@ const ProportionOverlay = ({
             )}
             {data.depth_cues && data.depth_cues.length > 0 && (
               <div>
-                <p className="font-semibold uppercase tracking-wide text-[10px] text-slate-500 mb-1">
+                <p className="font-bold uppercase tracking-wider text-[9px] text-slate-500 mb-1">
                   Depth cues
                 </p>
-                <ul className="list-disc list-inside space-y-0.5">
-                  {data.depth_cues.map((cue, idx) => (
+                <ul className="list-disc list-inside space-y-0.5 text-[10px] leading-snug">
+                  {data.depth_cues.slice(0, 4).map((cue, idx) => (
                     <li key={`cue-${idx}`}>{cue}</li>
                   ))}
                 </ul>
@@ -1126,14 +1185,14 @@ const SuggestionCard = ({
   onHover: (region: string | null) => void;
 }) => (
   <div
-    className="rounded-xl border border-slate-200/70 bg-white/90 px-4 py-3 text-xs text-slate-700 font-medium hover:border-blue-300 hover:shadow-md transition-all cursor-pointer"
+    className="rounded-lg border border-slate-200/70 bg-white/95 px-3 py-2 text-[11px] text-slate-700 font-medium hover:border-blue-300 hover:shadow-md transition-all cursor-pointer"
     onMouseEnter={() => onHover(regionRef ?? null)}
     onMouseLeave={() => onHover(null)}
   >
-    <p className="text-[11px] font-semibold uppercase text-slate-500 mb-1">{title}</p>
-    <p>{description}</p>
+    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-0.5">{title}</p>
+    <p className="leading-snug">{description}</p>
     {regionRef && (
-      <p className="text-[11px] text-slate-400 mt-1">Region: {regionRef}</p>
+      <p className="text-[10px] text-slate-400 mt-0.5">Region: {regionRef}</p>
     )}
   </div>
 );
